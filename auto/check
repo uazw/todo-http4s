@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+#
+# The pre-merge gate: every test, then the format check.
+#
+#   auto/check              hermetic — no database required
+#   auto/check --with-db    also run the PostgreSQL integration suite
+#   auto/check --help
+#
+# Exits non-zero if any test fails, any file is misformatted, or the run did
+# not cover what it claimed to. Works unchanged as a CI step.
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+# Where the integration spec expects PostgreSQL (see docker-compose.yml).
+db_host="${TODO_TEST_DB_HOST:-127.0.0.1}"
+db_port="${TODO_TEST_DB_PORT:-55432}"
+
+# The suite that only runs when a database is configured. Asserted on below.
+db_suite="DoobieTodoRepositorySpec"
+
+with_db=0
+
+usage() {
+  sed -n '3,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --with-db) with_db=1 ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'auto/check: unknown argument: %s\n\n' "$arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! command -v sbt >/dev/null 2>&1; then
+  printf 'auto/check: sbt is not on PATH.\n' >&2
+  printf '            Install it (brew install sbt) or set JAVA_HOME so the sbt runner can find a JDK.\n' >&2
+  exit 127
+fi
+
+# A reachable port is not proof the schema is right, but it turns the common
+# failure — "forgot to start the container" — into one clear line instead of a
+# wall of JDBC stack traces.
+tcp_open() {
+  (exec 3<>"/dev/tcp/$1/$2") 2>/dev/null
+}
+
+if [ "$with_db" -eq 1 ]; then
+  export TODO_TEST_DB=1
+  if ! tcp_open "$db_host" "$db_port"; then
+    printf 'auto/check: nothing listening on %s:%s, but --with-db was requested.\n' "$db_host" "$db_port" >&2
+    printf '            Start it with:  docker compose up -d postgres-test\n' >&2
+    exit 1
+  fi
+fi
+
+# Whether the database suite is expected to run, from either source.
+# Written as an `if` rather than `a || b && c`: that form returns non-zero when
+# both tests fail, which under `set -e` would abort the script silently.
+db_expected=0
+if [ "$with_db" -eq 1 ] || [ -n "${TODO_TEST_DB:-}" ]; then
+  db_expected=1
+fi
+
+if [ "$db_expected" -eq 1 ]; then
+  printf '==> running every suite, including the PostgreSQL integration spec\n'
+else
+  printf '==> running the hermetic suite\n\n'
+  # Do not let this scroll past silently: the integration spec is skipped via
+  # munitIgnore and the run still exits 0, so a partial gate is otherwise
+  # indistinguishable from a full green one.
+  printf '    note: TODO_TEST_DB is not set, so the PostgreSQL integration suite\n'
+  printf '          is SKIPPED. This run does not cover it. Use --with-db.\n\n'
+fi
+
+# Tests execute inside the long-lived sbt server JVM, and that JVM inherits the
+# environment it was *started* with — not the environment of whoever invokes
+# `sbt` next. A server left over from an earlier run therefore makes
+# TODO_TEST_DB a lie in both directions: `--with-db` reports success having
+# skipped the database suite, and a bare run silently executes it against a
+# database you did not ask for. Retire any running server first, so the gate
+# starts one carrying the environment we just set.
+sbt -batch shutdownall >/dev/null 2>&1 || true
+
+# Three things about running this under sbt 2:
+#   * `testFull` rather than `test` — Test/test depends on Test/testQuick, which
+#     prints "Total 0" and exits 0 when it thinks nothing changed.
+#   * Tasks are semicolon-separated; `sbt testFull scalafmtCheckAll` would be
+#     parsed as a single command and fail.
+#   * The environment has to be settled before the server starts, hence the
+#     shutdownall above.
+log="$(mktemp -t todo-check)"
+trap 'rm -f "$log"' EXIT
+
+# tee hides the terminal from sbt, so select colors before entering the pipe.
+color=never
+if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR:-}" ]; then
+  color=always
+fi
+
+set +e
+sbt -batch --color="$color" -Dsbt.supershell=false "; testFull; scalafmtCheckAll" 2>&1 | tee "$log"
+status=${PIPESTATUS[0]}
+set -e
+
+printf '\n'
+
+# sbt's exit status covers "tests failed" and "something is misformatted". It
+# does not cover "the suite I promised to run was skipped", so check that here.
+if [ "$status" -eq 0 ] && [ "$db_expected" -eq 1 ] && ! grep -q "$db_suite" "$log"; then
+  printf '==> check INCONCLUSIVE: exit 0, but the %s suite never ran.\n' "$db_suite" >&2
+  printf '    A database was expected at %s:%s. Re-run with --with-db, or unset\n' "$db_host" "$db_port" >&2
+  printf '    TODO_TEST_DB to accept a hermetic run.\n' >&2
+  exit 1
+fi
+
+if [ "$status" -ne 0 ]; then
+  printf '==> check FAILED (exit %d)\n' "$status" >&2
+elif [ "$db_expected" -eq 1 ]; then
+  printf '==> check passed — all suites, including the database\n'
+else
+  printf '==> check passed — hermetic; the integration suite was NOT covered\n'
+fi
+
+exit "$status"
