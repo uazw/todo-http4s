@@ -23,6 +23,8 @@ full suite; nothing else in the build needs to change either way.
 ## Layout
 
 ```
+auto/check                         # the gate: testFull + scalafmtCheckAll
+scripts/smoke.sh                   # end-to-end HTTP checks against a running instance
 src/main/scala/todo/
 ├── Main.scala                     # object graph as a Resource, ember server, request logging
 ├── config/AppConfig.scala         # HOCON + env vars, validated with readable errors
@@ -154,11 +156,38 @@ Errors are uniform, so a client parses one shape:
 ## Tests
 
 ```bash
-sbt testFull                     # every suite — use this in CI
+auto/check                       # the gate: every test + format check, no database needed
+auto/check --with-db             # same, plus the PostgreSQL integration suite
+auto/check --help
+```
+
+`auto/check` is the one command worth remembering: it runs `testFull` and `scalafmtCheckAll`, exits
+non-zero on any failure, and works from any directory. It is the same thing CI runs, so a green
+`auto/check` locally means a green build remotely.
+
+Two deliberate choices in it:
+
+- **It refuses to overstate what it covered.** The integration suite is skipped by `munitIgnore`
+  when `TODO_TEST_DB` is unset, and that skip still exits 0 — so a partial gate looks identical to a
+  full one. Without `--with-db` the script says so explicitly, and with `--with-db` it asserts the
+  suite actually appeared in the output, failing with `check INCONCLUSIVE` rather than reporting a
+  pass it cannot back up.
+- **It shuts down any running sbt server first**, for the reason in the box below.
+
+```bash
+sbt testFull                     # every suite
 sbt test                         # quick loop: only suites whose inputs changed
 docker compose up -d postgres-test
 TODO_TEST_DB=1 sbt testFull      # adds the doobie integration spec against postgres-test
 ```
+
+> **⚠️ An sbt server pins its environment at startup.** Tests run inside the long-lived sbt server
+> JVM, which inherits the environment it was *started* with — not the environment of the shell that
+> invokes `sbt` next. A server left over from an earlier run makes `TODO_TEST_DB` lie in **both**
+> directions: `TODO_TEST_DB=1 sbt testFull` can print a green run having skipped the database suite
+> entirely, and a bare `sbt testFull` can silently run it against a database you never configured.
+> `sbt shutdownall` before a run that depends on the variable. This is why `auto/check` does it for
+> you, and why trusting a hand-typed `TODO_TEST_DB=1` is a bad idea.
 
 > **sbt 2 splits `test` from `testFull`.** `Test/test` now depends on `Test/testQuick`, so a bare
 > `sbt test` with unchanged inputs prints `Passed: Total 0` / `No tests to run for Test / testQuick`
@@ -219,9 +248,13 @@ Choose a type that describes the change:
 | `feat`     | New features                         |
 | `fix`      | Bug fixes                            |
 | `docs`     | Documentation changes                |
+| `style`    | Formatting only — no behaviour change |
 | `refactor` | Code changes without behavior changes |
+| `perf`     | Performance improvements              |
 | `test`     | Adding or updating tests             |
-| `chore`    | Maintenance, tooling, or dependencies |
+| `build`    | Build system, dependencies, tooling  |
+| `ci`       | CI configuration and scripts         |
+| `chore`    | Other maintenance                    |
 
 The scope is optional; use the affected area, such as `http`, `service`, or `repository`.
 Write the description in the imperative ("add", "fix", "remove"), aim for a subject of
