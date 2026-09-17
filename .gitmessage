@@ -1,0 +1,13 @@
+# <type>(<optional scope>): <short description>
+#
+# Types: feat, fix, docs, refactor, test, chore
+# Scopes: http, service, repository, domain, config, db (optional)
+# Use imperative wording, keep the subject within 72 characters,
+# and omit the trailing period.
+# Example: feat(http): add filtering by due date
+
+# Explain why the change was made, if needed. Separate the body
+# from the subject with a blank line.
+
+# For breaking changes, add ! before the subject's colon and a footer:
+# BREAKING CHANGE: Describe the change and required migration.
