@@ -1,6 +1,5 @@
 package todo.service
 
-import cats.effect.IO
 import java.time.{Duration, Instant}
 import munit.CatsEffectSuite
 import todo.TestStack
@@ -29,7 +28,7 @@ class TodoServiceSpec extends CatsEffectSuite:
     fixture.flatMap { f =>
       for
         blank <- f.service.create(CreateTodo("   "))
-        long  <- f.service.create(CreateTodo("x" * (Validation.MaxTitleLength + 1)))
+        long <- f.service.create(CreateTodo("x" * (Validation.MaxTitleLength + 1)))
       yield
         assertEquals(blank, Left(TodoError.Invalid("title", "must not be blank")))
         assert(long.isLeft)
@@ -58,9 +57,9 @@ class TodoServiceSpec extends CatsEffectSuite:
         created <- f.service.create(CreateTodo("draft", Some("first pass")))
         id = created.toOption.get.id
         updated <- f.service.update(
-                     id,
-                     UpdateTodo(title = Some("final"), status = Some(TodoStatus.InProgress))
-                   )
+          id,
+          UpdateTodo(title = Some("final"), status = Some(TodoStatus.InProgress))
+        )
       yield
         val todo = updated.toOption.get
         assertEquals(todo.title, "final")
@@ -76,8 +75,8 @@ class TodoServiceSpec extends CatsEffectSuite:
       for
         created <- f.service.create(CreateTodo("draft", Some("first pass"), Some(start.plusSeconds(60))))
         id = created.toOption.get.id
-        cleared  <- f.service.update(id, UpdateTodo(description = Some(None)))
-        kept     <- f.service.update(id, UpdateTodo(title = Some("renamed")))
+        cleared <- f.service.update(id, UpdateTodo(description = Some(None)))
+        kept <- f.service.update(id, UpdateTodo(title = Some("renamed")))
       yield
         assertEquals(cleared.toOption.get.description, None)
         assertEquals(cleared.toOption.get.dueAt, Some(start.plusSeconds(60)))
@@ -112,9 +111,9 @@ class TodoServiceSpec extends CatsEffectSuite:
       for
         created <- f.service.create(CreateTodo("obsolete"))
         id = created.toOption.get.id
-        first  <- f.service.delete(id)
+        first <- f.service.delete(id)
         second <- f.service.delete(id)
-        gone   <- f.service.get(id)
+        gone <- f.service.get(id)
       yield
         assertEquals(first, Right(()))
         assert(second.left.exists(_.isInstanceOf[TodoError.NotFound]))
@@ -129,7 +128,7 @@ class TodoServiceSpec extends CatsEffectSuite:
         _ <- f.service.create(CreateTodo("buy bread"))
         _ <- f.service.create(CreateTodo("call the dentist"))
         page <- f.service.list(TodoFilter(search = Some("buy")), limit = 1, offset = 0)
-        all  <- f.service.list(TodoFilter.all, limit = 50, offset = 0)
+        all <- f.service.list(TodoFilter.all, limit = 50, offset = 0)
         done <- f.service.list(TodoFilter(status = Some(TodoStatus.Done)), limit = 50, offset = 0)
       yield
         assertEquals(page.toOption.get.total, 2L) // total counts matches, not the page

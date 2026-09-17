@@ -11,10 +11,9 @@ import todo.db.HealthCheck
 import todo.domain.*
 import todo.service.TodoService
 
-/**
- * HTTP edge. It does three things and nothing else: turn a request into domain
- * input, call the service algebra, turn the `TodoError` back into a status code.
- */
+/** HTTP edge. It does three things and nothing else: turn a request into domain input, call the service algebra, turn
+  * the `TodoError` back into a status code.
+  */
 final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: HealthCheck[F]) extends Http4sDsl[F]:
 
   val routes: HttpRoutes[F] = HttpRoutes.of[F] {
@@ -50,11 +49,14 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
   private def listTodos(req: Request[F]): F[Response[F]] =
     val params = req.uri.query.params
     val parsed = for
-      status    <- optionalStatus(params)
-      limit     <- intParam(params, "limit", TodoService.DefaultLimit, 1, TodoService.MaxLimit)
-      offset    <- intParam(params, "offset", 0, 0, Int.MaxValue)
+      status <- optionalStatus(params)
+      limit <- intParam(params, "limit", TodoService.DefaultLimit, 1, TodoService.MaxLimit)
+      offset <- intParam(params, "offset", 0, 0, Int.MaxValue)
       dueBefore <- optionalInstant(params, "due_before")
-    yield TodoFilter(status, search = params.get("q").map(_.trim).filter(_.nonEmpty), dueBefore = dueBefore) -> (limit, offset)
+    yield TodoFilter(status, search = params.get("q").map(_.trim).filter(_.nonEmpty), dueBefore = dueBefore) -> (
+      limit,
+      offset
+    )
 
     parsed match
       case Left(error) => errorResponse(error)
@@ -77,7 +79,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
         BadRequest(ErrorView.of("invalid_json", failure.message))
       case Right(body) =>
         PatchTodoRequest.toDomain(body) match
-          case Left(error) => errorResponse(error)
+          case Left(error)   => errorResponse(error)
           case Right(update) => complete(service.update(id, update))(todo => Ok(TodoView.from(todo)))
     }
 
@@ -124,9 +126,11 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
     params.get(key) match
       case None | Some("") => Right(default)
       case Some(raw) =>
-        raw.trim.toIntOption.filter(value => value >= min && value <= max).toRight(
-          TodoError.Invalid(key, s"must be an integer between $min and $max")
-        )
+        raw.trim.toIntOption
+          .filter(value => value >= min && value <= max)
+          .toRight(
+            TodoError.Invalid(key, s"must be an integer between $min and $max")
+          )
 
 object TodoRoutes:
 

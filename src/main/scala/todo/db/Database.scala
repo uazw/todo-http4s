@@ -10,11 +10,9 @@ import todo.config.DatabaseConfig
 
 object Database:
 
-  /**
-   * Hikari-backed [[Transactor]] as a `Resource`, so the pool is closed on
-   * shutdown. JDBC calls block, so they get a dedicated pool of their own —
-   * the compute pool is never blocked waiting on a query.
-   */
+  /** Hikari-backed [[Transactor]] as a `Resource`, so the pool is closed on shutdown. JDBC calls block, so they get a
+    * dedicated pool of their own — the compute pool is never blocked waiting on a query.
+    */
   def transactor[F[_]: Async](config: DatabaseConfig): Resource[F, Transactor[F]] =
     blockingPool[F](math.max(2, config.poolSize), "todo-db").flatMap { connectEC =>
       val hikari = new HikariConfig()

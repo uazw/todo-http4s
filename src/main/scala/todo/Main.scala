@@ -30,27 +30,26 @@ object Main extends IOApp:
   def application(config: AppConfig): Resource[IO, Unit] =
     for
       xa <- Database.transactor[IO](config.database)
-      _  <- Resource.eval(IO.whenA(config.migrateOnStart)(Migrator.run[IO](xa)))
-      _  <- Resource.eval(IO(logger.info("connected to {}", config.database.jdbcUrl)))
+      _ <- Resource.eval(IO.whenA(config.migrateOnStart)(Migrator.run[IO](xa)))
+      _ <- Resource.eval(IO(logger.info("connected to {}", config.database.jdbcUrl)))
       repository = DoobieTodoRepository[IO](xa)
-      service    = TodoService.make[IO](repository, Clock.system[IO], IdGen.random[IO])
-      routes     = TodoRoutes[IO](service, HealthCheck.postgres[IO](xa)).routes
-      httpApp    = requestLogging(routes.orNotFound)
-      host       = Host.fromString(config.http.host).getOrElse(host"0.0.0.0")
-      port       = Port.fromInt(config.http.port).getOrElse(port"8080")
+      service = TodoService.make[IO](repository, Clock.system[IO], IdGen.random[IO])
+      routes = TodoRoutes[IO](service, HealthCheck.postgres[IO](xa)).routes
+      httpApp = requestLogging(routes.orNotFound)
+      host = Host.fromString(config.http.host).getOrElse(host"0.0.0.0")
+      port = Port.fromInt(config.http.port).getOrElse(port"8080")
       _ <- EmberServerBuilder
-             .default[IO]
-             .withHost(host)
-             .withPort(port)
-             .withHttpApp(httpApp)
-             .build
-             .evalTap(_ => IO(logger.info("todo-service listening on http://{}:{}", host.toString, port.value.toString)))
+        .default[IO]
+        .withHost(host)
+        .withPort(port)
+        .withHttpApp(httpApp)
+        .build
+        .evalTap(_ => IO(logger.info("todo-service listening on http://{}:{}", host.toString, port.value.toString)))
     yield ()
 
-  /**
-   * One structured log line per request. Hand-rolled because http4s' own
-   * request logger needs a log4cats instance this service has no other use for.
-   */
+  /** One structured log line per request. Hand-rolled because http4s' own request logger needs a log4cats instance this
+    * service has no other use for.
+    */
   private def requestLogging(app: HttpApp[IO]): HttpApp[IO] =
     Kleisli { request =>
       IO.monotonic.flatMap { started =>
@@ -59,7 +58,7 @@ object Main extends IOApp:
             val elapsedMs = (finished - started).toMillis
             val line = outcome match
               case Right(response) => s"${request.method.name} ${request.uri} ${response.status.code} ${elapsedMs}ms"
-              case Left(error)     => s"${request.method.name} ${request.uri} FAILED ${elapsedMs}ms — ${error.getMessage}"
+              case Left(error) => s"${request.method.name} ${request.uri} FAILED ${elapsedMs}ms — ${error.getMessage}"
             IO(logger.info(line)) *> IO.fromEither(outcome)
           }
         }
