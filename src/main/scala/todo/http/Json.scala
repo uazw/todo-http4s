@@ -47,20 +47,18 @@ final case class CreateTodoRequest(
 object CreateTodoRequest:
   given Decoder[CreateTodoRequest] = Decoder.instance { c =>
     for
-      title       <- c.get[String]("title")
+      title <- c.get[String]("title")
       description <- c.get[Option[String]]("description")
-      dueAt       <- c.get[Option[Instant]]("dueAt")
+      dueAt <- c.get[Option[Instant]]("dueAt")
     yield CreateTodoRequest(title, description, dueAt)
   }
 
   def toDomain(request: CreateTodoRequest): CreateTodo =
     CreateTodo(request.title, request.description, request.dueAt)
 
-/**
- * PATCH body. Decoded by hand rather than derived so that a field which is
- * *absent* can be told apart from one explicitly set to `null`: absent leaves
- * the value alone, explicit null clears it.
- */
+/** PATCH body. Decoded by hand rather than derived so that a field which is *absent* can be told apart from one
+  * explicitly set to `null`: absent leaves the value alone, explicit null clears it.
+  */
 final case class PatchTodoRequest(
     title: Option[String] = None,
     description: Option[Option[String]] = None,
@@ -77,10 +75,10 @@ object PatchTodoRequest:
 
   given Decoder[PatchTodoRequest] = Decoder.instance { c =>
     for
-      title       <- c.get[Option[String]]("title")
+      title <- c.get[Option[String]]("title")
       description <- patchField[String](c, "description")
-      status      <- c.get[Option[String]]("status")
-      dueAt       <- patchField[Instant](c, "dueAt")
+      status <- c.get[Option[String]]("status")
+      dueAt <- patchField[Instant](c, "dueAt")
     yield PatchTodoRequest(title, description, status, dueAt)
   }
 
@@ -112,8 +110,10 @@ private[http] object JsonSupport:
 
   /** Renders a decode failure as `dueAt: Invalid date-time format`, say. */
   def decodingFailureMessage(failure: DecodingFailure): String =
-    val path = failure.history.reverse.flatMap {
-      case io.circe.CursorOp.DownField(name) => Some(name)
-      case _                                 => None
-    }.mkString(".")
+    val path = failure.history.reverse
+      .flatMap {
+        case io.circe.CursorOp.DownField(name) => Some(name)
+        case _                                 => None
+      }
+      .mkString(".")
     if path.isEmpty then failure.message else s"$path: ${failure.message}"

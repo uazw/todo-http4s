@@ -31,10 +31,13 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         .withEntity(Json.obj("title" -> Json.fromString("write the tests")))
       for
         response <- send(f, request)
-        json     <- body(response)
+        json <- body(response)
       yield
         assertEquals(response.status, Status.Created)
-        assertEquals(response.headers.get[Location].map(_.uri.renderString), Some("/api/todos/" + json.hcursor.get[String]("id").toOption.get))
+        assertEquals(
+          response.headers.get[Location].map(_.uri.renderString),
+          Some("/api/todos/" + json.hcursor.get[String]("id").toOption.get)
+        )
         assertEquals(json.hcursor.get[String]("status").toOption, Some("pending"))
         assertEquals(json.hcursor.get[String]("title").toOption, Some("write the tests"))
     }
@@ -46,7 +49,7 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         .withEntity(Json.obj("title" -> Json.fromString("")))
       for
         response <- send(f, request)
-        json     <- body(response)
+        json <- body(response)
       yield
         assertEquals(response.status, Status.BadRequest)
         assertEquals(json.hcursor.get[String]("field").toOption, Some("title"))
@@ -69,13 +72,13 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         send(f, Request[IO](Method.POST, uri"/api/todos").withEntity(payload)).void
 
       for
-        _        <- create("alpha")
-        _        <- create("beta")
+        _ <- create("alpha")
+        _ <- create("beta")
         response <- send(f, Request[IO](Method.GET, Uri.unsafeFromString("/api/todos?limit=10&offset=0")))
-        json     <- body(response)
-        cursor    = json.hcursor
-        items    <- IO.fromEither(cursor.get[List[Json]]("items"))
-        total    <- IO.fromEither(cursor.get[Long]("total"))
+        json <- body(response)
+        cursor = json.hcursor
+        items <- IO.fromEither(cursor.get[List[Json]]("items"))
+        total <- IO.fromEither(cursor.get[Long]("total"))
         filtered <- body(send(f, Request[IO](Method.GET, Uri.unsafeFromString("/api/todos?q=alpha"))))
       yield
         assertEquals(response.status, Status.Ok)
@@ -96,8 +99,11 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   test("GET /api/todos/{id} returns 404 for an unknown id and 400 for a non-uuid") {
     withStack { f =>
       for
-        missing    <- send(f, Request[IO](Method.GET, Uri.unsafeFromString("/api/todos/2f1c1b1e-0000-4000-8000-000000000000")))
-        notAnId    <- send(f, Request[IO](Method.GET, uri"/api/todos/not-a-uuid"))
+        missing <- send(
+          f,
+          Request[IO](Method.GET, Uri.unsafeFromString("/api/todos/2f1c1b1e-0000-4000-8000-000000000000"))
+        )
+        notAnId <- send(f, Request[IO](Method.GET, uri"/api/todos/not-a-uuid"))
       yield
         assertEquals(missing.status, Status.NotFound)
         assertEquals(notAnId.status, Status.BadRequest)
@@ -107,25 +113,30 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   test("PATCH /api/todos/{id} updates status, and null clears the due date") {
     withStack { f =>
       for
-        created <- body(send(f, Request[IO](Method.POST, uri"/api/todos").withEntity(
-                     Json.obj(
-                       "title" -> Json.fromString("ship it"),
-                       "dueAt" -> Json.fromString("2026-04-01T10:00:00Z")
-                     )
-                   )))
-        id  = created.hcursor.get[String]("id").toOption.get
+        created <- body(
+          send(
+            f,
+            Request[IO](Method.POST, uri"/api/todos").withEntity(
+              Json.obj(
+                "title" -> Json.fromString("ship it"),
+                "dueAt" -> Json.fromString("2026-04-01T10:00:00Z")
+              )
+            )
+          )
+        )
+        id = created.hcursor.get[String]("id").toOption.get
         path = Uri.unsafeFromString(s"/api/todos/$id")
         patched <- body(
-                     send(
-                       f,
-                       Request[IO](Method.PATCH, path).withEntity(
-                         Json.obj(
-                           "status" -> Json.fromString("done"),
-                           "dueAt"  -> Json.Null
-                         )
-                       )
-                     )
-                   )
+          send(
+            f,
+            Request[IO](Method.PATCH, path).withEntity(
+              Json.obj(
+                "status" -> Json.fromString("done"),
+                "dueAt" -> Json.Null
+              )
+            )
+          )
+        )
       yield
         assertEquals(patched.hcursor.get[String]("status").toOption, Some("done"))
         assertEquals(patched.hcursor.get[String]("title").toOption, Some("ship it"))
@@ -136,12 +147,17 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   test("DELETE /api/todos/{id} returns 204, then the todo is gone") {
     withStack { f =>
       for
-        created <- body(send(f, Request[IO](Method.POST, uri"/api/todos").withEntity(
-                     Json.obj("title" -> Json.fromString("temporary"))
-                   )))
-        id     = created.hcursor.get[String]("id").toOption.get
-        path   = Uri.unsafeFromString(s"/api/todos/$id")
-        first  <- send(f, Request[IO](Method.DELETE, path))
+        created <- body(
+          send(
+            f,
+            Request[IO](Method.POST, uri"/api/todos").withEntity(
+              Json.obj("title" -> Json.fromString("temporary"))
+            )
+          )
+        )
+        id = created.hcursor.get[String]("id").toOption.get
+        path = Uri.unsafeFromString(s"/api/todos/$id")
+        first <- send(f, Request[IO](Method.DELETE, path))
         second <- send(f, Request[IO](Method.DELETE, path))
       yield
         assertEquals(first.status, Status.NoContent)
@@ -152,7 +168,7 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   test("GET /health reports the database as up and an unknown route as 404") {
     withStack { f =>
       for
-        health  <- body(send(f, Request[IO](Method.GET, uri"/health")))
+        health <- body(send(f, Request[IO](Method.GET, uri"/health")))
         unknown <- send(f, Request[IO](Method.GET, uri"/nope"))
       yield
         assertEquals(health.hcursor.get[String]("database").toOption, Some("up"))

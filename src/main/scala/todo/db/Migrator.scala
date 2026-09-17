@@ -6,13 +6,12 @@ import doobie.*
 import doobie.implicits.*
 import scala.io.Source
 
-/**
- * Minimal schema bootstrap: runs the bundled `schema.sql`. The DDL is written
- * to be idempotent (`IF NOT EXISTS`), so running it on every boot is a no-op.
- *
- * For a schema that evolves, swap this for Flyway/Liquibase — the rest of the
- * application does not care how the tables got there.
- */
+/** Minimal schema bootstrap: runs the bundled `schema.sql`. The DDL is written to be idempotent (`IF NOT EXISTS`), so
+  * running it on every boot is a no-op.
+  *
+  * For a schema that evolves, swap this for Flyway/Liquibase — the rest of the application does not care how the tables
+  * got there.
+  */
 object Migrator:
 
   val DefaultScript: String = "db/schema.sql"

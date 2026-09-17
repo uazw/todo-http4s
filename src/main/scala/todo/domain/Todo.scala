@@ -18,10 +18,10 @@ object TodoStatus:
   /** Tolerant parser: accepts `in-progress`, `In Progress`, `completed`, ... */
   def fromWire(value: String): Option[TodoStatus] =
     value.trim.toLowerCase.replace('-', '_').replace(' ', '_') match
-      case "pending"                    => Some(Pending)
-      case "in_progress" | "inprogress" => Some(InProgress)
+      case "pending"                         => Some(Pending)
+      case "in_progress" | "inprogress"      => Some(InProgress)
       case "done" | "complete" | "completed" => Some(Done)
-      case _                            => None
+      case _                                 => None
 
   val all: List[TodoStatus] = List(Pending, InProgress, Done)
 
@@ -50,10 +50,9 @@ final case class CreateTodo(
     dueAt: Option[Instant] = None
 )
 
-/**
- * Partial update. `None` means "leave this field alone"; the nested `Option` on
- * `description`/`dueAt` distinguishes "absent" from "explicitly set to null".
- */
+/** Partial update. `None` means "leave this field alone"; the nested `Option` on `description`/`dueAt` distinguishes
+  * "absent" from "explicitly set to null".
+  */
 final case class UpdateTodo(
     title: Option[String] = None,
     description: Option[Option[String]] = None,

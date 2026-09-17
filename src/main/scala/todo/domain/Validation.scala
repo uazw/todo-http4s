@@ -1,12 +1,11 @@
 package todo.domain
 
-/**
- * Pure validation of incoming payloads. Kept out of the HTTP layer so the same
- * rules apply no matter which interface calls the service.
- */
+/** Pure validation of incoming payloads. Kept out of the HTTP layer so the same rules apply no matter which interface
+  * calls the service.
+  */
 object Validation:
 
-  val MaxTitleLength: Int       = 200
+  val MaxTitleLength: Int = 200
   val MaxDescriptionLength: Int = 2000
 
   private def prepare(raw: String): String =

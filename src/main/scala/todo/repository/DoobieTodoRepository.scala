@@ -9,23 +9,20 @@ import java.time.Instant
 import java.util.UUID
 import todo.domain.*
 
-/**
- * doobie interpreter of [[TodoRepository]].
- *
- * The row type is mapped once, in the `Read[Todo]` given below, and every query
- * selects the same column list, so adding a column is a single-place change.
- */
+/** doobie interpreter of [[TodoRepository]].
+  *
+  * The row type is mapped once, in the `Read[Todo]` given below, and every query selects the same column list, so
+  * adding a column is a single-place change.
+  */
 final class DoobieTodoRepository[F[_]: MonadCancelThrow](xa: Transactor[F]) extends TodoRepository[F]:
 
   private val columns: Fragment = fr"id, title, description, status, due_at, created_at, updated_at"
 
-  /**
-   * `doobie.postgres.implicits` maps java.time types through the driver's own
-   * `setObject`/`getObject` support, so `Instant` reaches `TIMESTAMPTZ` as an
-   * absolute instant. Routing it through `java.sql.Timestamp` instead would
-   * reinterpret it in the JVM's default zone — a bug that only shows up in
-   * production, on a machine that is not in UTC.
-   */
+  /** `doobie.postgres.implicits` maps java.time types through the driver's own `setObject`/`getObject` support, so
+    * `Instant` reaches `TIMESTAMPTZ` as an absolute instant. Routing it through `java.sql.Timestamp` instead would
+    * reinterpret it in the JVM's default zone — a bug that only shows up in production, on a machine that is not in
+    * UTC.
+    */
   private given Read[Todo] =
     Read[(UUID, String, Option[String], String, Option[Instant], Instant, Instant)].map {
       case (id, title, description, status, dueAt, createdAt, updatedAt) =>

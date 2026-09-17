@@ -2,10 +2,9 @@ package todo.domain
 
 import cats.Applicative
 
-/**
- * The error channel used by the service algebras: a typed `TodoError` in the
- * left position, wrapped in the effect so it composes with effectful steps.
- */
+/** The error channel used by the service algebras: a typed `TodoError` in the left position, wrapped in the effect so
+  * it composes with effectful steps.
+  */
 type Result[F[_], A] = F[Either[TodoError, A]]
 
 object Result:

@@ -4,14 +4,12 @@ import cats.effect.{Ref, Sync}
 import cats.syntax.all.*
 import todo.domain.*
 
-/**
- * Second interpreter of [[TodoRepository]], backed by a `Ref`. It is what makes
- * the tagless-final split pay off: the service and HTTP specs exercise real
- * behaviour with no database in sight.
- *
- * Filtering, ordering and paging mirror the SQL implementation on purpose, so
- * the two can be swapped in tests without changing expectations.
- */
+/** Second interpreter of [[TodoRepository]], backed by a `Ref`. It is what makes the tagless-final split pay off: the
+  * service and HTTP specs exercise real behaviour with no database in sight.
+  *
+  * Filtering, ordering and paging mirror the SQL implementation on purpose, so the two can be swapped in tests without
+  * changing expectations.
+  */
 final class InMemoryTodoRepository[F[_]: Sync](state: Ref[F, Map[TodoId, Todo]]) extends TodoRepository[F]:
 
   def insert(todo: Todo): F[Todo] =

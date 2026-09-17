@@ -30,7 +30,7 @@ object TestStack:
     for
       state <- Ref.of[IO, Map[todo.domain.TodoId, Todo]](Map.empty)
       clock <- Clock.stepping[IO](start, step)
-      ids   <- IdGen.sequential[IO](namespace)
+      ids <- IdGen.sequential[IO](namespace)
       repository = InMemoryTodoRepository[IO](state)
-      service    = TodoService.make[IO](repository, clock, ids)
+      service = TodoService.make[IO](repository, clock, ids)
     yield Fixture(repository, service, TodoRoutes[IO](service, HealthCheck.alwaysHealthy[IO]))
