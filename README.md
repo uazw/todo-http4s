@@ -7,12 +7,18 @@ effect system, **doobie** for PostgreSQL, **http4s + circe** at the edge.
 
 | Concern      | Choice                                    |
 | ------------ | ----------------------------------------- |
-| Language     | Scala 3.3.4 (LTS)                         |
+| Language     | Scala 3.9.0                               |
+| Build        | sbt 2.0.9                                 |
 | Effects      | cats-effect 3.5                           |
 | Persistence  | doobie 1.0 + HikariCP + PostgreSQL        |
 | HTTP         | http4s 0.23 (ember server) + circe        |
 | Config       | Typesafe Config (HOCON + env overrides)   |
 | Tests        | munit + munit-cats-effect                 |
+
+On the Scala version: this tracks the latest stable release rather than the LTS line. If you would
+rather be on LTS — the usual choice for a library that others compile against, since it is patched
+for years — set `ThisBuild / scalaVersion := "3.3.8"` in `build.sbt`. Both are verified to pass the
+full suite; nothing else in the build needs to change either way.
 
 ## Layout
 
@@ -148,16 +154,47 @@ Errors are uniform, so a client parses one shape:
 ## Tests
 
 ```bash
-sbt test                       # hermetic: service + HTTP specs, no database
+sbt testFull                     # every suite — use this in CI
+sbt test                         # quick loop: only suites whose inputs changed
 docker compose up -d postgres-test
-TODO_TEST_DB=1 sbt test        # adds the doobie integration spec against postgres-test
+TODO_TEST_DB=1 sbt testFull      # adds the doobie integration spec against postgres-test
 ```
+
+> **sbt 2 splits `test` from `testFull`.** `Test/test` now depends on `Test/testQuick`, so a bare
+> `sbt test` with unchanged inputs prints `Passed: Total 0` / `No tests to run for Test / testQuick`
+> and exits **0**. That is fine for a local edit-run loop and dangerous in CI, where it looks like a
+> pass while running nothing. Always use `testFull` in CI.
+>
+> Two other CLI changes: task arguments are no longer space-separated (`sbt clean testFull` is parsed
+> as one command and fails), so separate them with `;` — `sbt "; clean; testFull"`. And after a
+> `clean`, use `testFull`; `test` may still report nothing to run from cached results.
 
 The unit specs run against `InMemoryTodoRepository`, the second interpreter of the repository
 algebra, wired with a deterministic `Clock` and `IdGen` — which is the whole reason those two are
 algebras rather than direct calls to `Instant.now()` and `UUID.randomUUID()`. The integration spec
 covers what in-memory cannot: real `TIMESTAMPTZ` round-tripping, ordering and `OFFSET`, `ILIKE`
 semantics, and that a literal `%` in a search term is escaped rather than treated as a wildcard.
+
+## Formatting
+
+Formatting is enforced by [scalafmt](https://scalameta.org/scalafmt/) through the `sbt-scalafmt`
+plugin, configured in `.scalafmt.conf` (Scala 3 dialect, 120 columns). The formatter version lives in
+that file and is downloaded on demand — the plugin only supplies the sbt tasks.
+
+```bash
+sbt scalafmtCheckAll   # verify every file matches the config — exits non-zero and names each offender
+sbt scalafmtAll        # rewrite the files in place
+sbt scalafmtCheck      # main sources only
+sbt scalafmtSbtCheck   # build.sbt and project/*.sbt only
+```
+
+`scalafmtCheckAll` is the one to wire into CI; it needs no database and no compile step. To
+combine tasks in one invocation, separate them with `;`: `sbt "; testFull; scalafmtCheckAll"`.
+
+`project/plugins.sbt` is checked in for exactly this reason — `.scalafmt.conf` on its own does
+nothing, since nothing reads it. sbt resolves the correct plugin artifact line from the sbt version
+pinned in `project/build.properties` (`_2.12_1.0` on the 1.x line, `_sbt2_3` on 2.x), so the same
+`addSbtPlugin` line works on either line.
 
 ## Commit messages
 
