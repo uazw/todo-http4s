@@ -1,6 +1,12 @@
 # <type>(<optional scope>): <short description>
 #
-# Types: feat, fix, docs, refactor, test, chore
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+#
+#   feat      new user-facing behaviour      style  formatting only
+#   fix       bug fix                        perf   performance
+#   docs      documentation                  build  build system, deps, tooling
+#   refactor  no behaviour change            ci     CI configuration and scripts
+#   test      tests                          chore  other maintenance
 # Scopes: http, service, repository, domain, config, db (optional)
 # Use imperative wording, keep the subject within 72 characters,
 # and omit the trailing period.
