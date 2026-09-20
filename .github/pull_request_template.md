@@ -12,9 +12,13 @@
 
 <!-- Describe the checks run and their results. If none, explain why.
 Examples:
-- sbt test
-- TODO_TEST_DB=1 sbt test (with postgres-test running)
-- scripts/smoke.sh (with the service and database running)
+- ./auto/check              (hermetic: every unit and HTTP spec, plus the format check)
+- ./auto/check --with-db    (adds the PostgreSQL integration suite; matches CI)
+- scripts/smoke.sh          (end-to-end HTTP checks against a running instance)
+
+Prefer ./auto/check over a hand-typed sbt invocation: a bare `sbt test` can skip
+work in sbt 2, and `TODO_TEST_DB=1 sbt ...` is unreliable because the sbt server
+pins its environment at startup.
 -->
 
 ## Breaking changes or migrations

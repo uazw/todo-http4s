@@ -217,13 +217,41 @@ sbt scalafmtCheck      # main sources only
 sbt scalafmtSbtCheck   # build.sbt and project/*.sbt only
 ```
 
-`scalafmtCheckAll` is the one to wire into CI; it needs no database and no compile step. To
-combine tasks in one invocation, separate them with `;`: `sbt "; testFull; scalafmtCheckAll"`.
+Formatting is checked as part of `auto/check`, so there is no separate step to remember. To combine
+tasks by hand, separate them with `;`: `sbt "; testFull; scalafmtCheckAll"`.
 
 `project/plugins.sbt` is checked in for exactly this reason — `.scalafmt.conf` on its own does
 nothing, since nothing reads it. sbt resolves the correct plugin artifact line from the sbt version
 pinned in `project/build.properties` (`_2.12_1.0` on the 1.x line, `_sbt2_3` on 2.x), so the same
 `addSbtPlugin` line works on either line.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every pull request, on pushes to `main`, and on demand. There is
+one job, and it does one thing:
+
+```yaml
+- run: ./auto/check --with-db
+```
+
+CI deliberately owns no test logic of its own. It starts a `postgres:16-alpine` service (with a
+`pg_isready` health check, so the job cannot race the database's startup), sets up JDK 21 and sbt,
+and calls the same script you run locally. Anything CI catches, `./auto/check --with-db` catches
+first — which is the point.
+
+Two details worth knowing:
+
+- **The port differs from local.** The service container publishes Postgres on `5432`, so the job
+  sets `TODO_TEST_DB_PORT=5432`. Locally, `docker-compose.yml` puts the test database on `55432` to
+  stay clear of the development one. `auto/check` reads the same variable, so it follows along.
+- **`auto/check` retires the sbt server before testing.** That matters here for the reason described
+  under Tests: the test JVM inherits the sbt server's environment, so a stale server would make the
+  database suite silently skip while the job still reported success. The script's own assertion that
+  the suite ran is the backstop.
+
+Dependency caches (`~/.ivy2`, `~/.sbt`, `~/.cache/coursier`) are keyed on `build.sbt`,
+`project/build.properties` and `project/plugins.sbt`, so a build-tool change invalidates them and a
+source-only change does not.
 
 ## Commit messages
 
