@@ -18,6 +18,11 @@ env:
 jobs:
   check:
     name: tests + format
+    # Deliberately not pinned to a dated image. GitHub has announced that
+    # `ubuntu-latest` moves to Ubuntu 26 on 2026-10-19; auto/check is written for
+    # both BSD and GNU userland and was verified on ubuntu:24.04, so the label
+    # can migrate on its own. Pin `runs-on: ubuntu-24.04` instead if you would
+    # rather control that timing.
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
