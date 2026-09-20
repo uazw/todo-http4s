@@ -43,7 +43,11 @@ done
 
 if ! command -v sbt >/dev/null 2>&1; then
   printf 'auto/check: sbt is not on PATH.\n' >&2
-  printf '            Install it (brew install sbt) or set JAVA_HOME so the sbt runner can find a JDK.\n' >&2
+  case "$(uname -s)" in
+    Darwin) printf '            Install it with:  brew install sbt\n' >&2 ;;
+    Linux) printf '            Install it with:  apt-get install sbt   (or see https://www.scala-sbt.org/download)\n' >&2 ;;
+    *) printf '            See https://www.scala-sbt.org/download\n' >&2 ;;
+  esac
   exit 127
 fi
 
@@ -98,7 +102,9 @@ sbt -batch shutdownall >/dev/null 2>&1 || true
 #     parsed as a single command and fail.
 #   * The environment has to be settled before the server starts, hence the
 #     shutdownall above.
-log="$(mktemp -t todo-check)"
+# The template needs explicit X's: BSD `mktemp -t name` is not portable — GNU
+# coreutils rejects it with "too few X's in template" and aborts the run.
+log="$(mktemp "${TMPDIR:-/tmp}/todo-check.XXXXXX")"
 trap 'rm -f "$log"' EXIT
 
 # tee hides the terminal from sbt, so select colors before entering the pipe.
