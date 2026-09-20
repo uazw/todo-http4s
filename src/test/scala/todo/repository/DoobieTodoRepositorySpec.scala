@@ -7,6 +7,7 @@ import doobie.implicits.*
 import java.time.{Instant, ZoneOffset}
 import java.util.UUID
 import munit.CatsEffectSuite
+import org.testcontainers.postgresql.PostgreSQLContainer
 import scala.concurrent.duration.*
 import todo.config.DatabaseConfig
 import todo.db.{Database, Migrator}
@@ -14,24 +15,32 @@ import todo.domain.*
 
 /** Integration spec for the doobie interpreter against a real PostgreSQL.
   *
-  * Start one with `docker compose up -d postgres-test`, then run `TODO_TEST_DB=1 sbt test`. Without that env var the
-  * suite is skipped so a plain `sbt test` stays hermetic.
+  * Testcontainers starts an isolated database for this suite and removes it afterwards. The only external requirement
+  * is a Docker-compatible container runtime.
   */
 class DoobieTodoRepositorySpec extends CatsEffectSuite:
 
-  override def munitIgnore: Boolean = !sys.env.get("TODO_TEST_DB").exists(_.nonEmpty)
+  private val postgres =
+    new PostgreSQLContainer("postgres:16-alpine")
+      .withDatabaseName("todo_test")
+      .withUsername("todo")
+      .withPassword("todo")
 
-  private val config = DatabaseConfig(
-    host = sys.env.getOrElse("TODO_TEST_DB_HOST", "localhost"),
-    port = sys.env.get("TODO_TEST_DB_PORT").flatMap(_.toIntOption).getOrElse(55432),
-    name = sys.env.getOrElse("TODO_TEST_DB_NAME", "todo_test"),
-    user = sys.env.getOrElse("TODO_TEST_DB_USER", "todo"),
-    password = sys.env.getOrElse("TODO_TEST_DB_PASSWORD", "todo"),
+  override def beforeAll(): Unit = postgres.start()
+
+  override def afterAll(): Unit = postgres.stop()
+
+  private lazy val config = DatabaseConfig(
+    host = postgres.getHost,
+    port = postgres.getFirstMappedPort,
+    name = postgres.getDatabaseName,
+    user = postgres.getUsername,
+    password = postgres.getPassword,
     poolSize = 4,
     connectionTimeout = 5.seconds
   )
 
-  private val transactor: Resource[IO, Transactor[IO]] = Database.transactor[IO](config)
+  private lazy val transactor: Resource[IO, Transactor[IO]] = Database.transactor[IO](config)
 
   /** Fresh schema per test — the table is truncated, not the database dropped. */
   private def withRepository[A](body: TodoRepository[IO] => IO[A]): IO[A] =

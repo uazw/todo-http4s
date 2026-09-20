@@ -26,23 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: todo_test
-          POSTGRES_USER: todo
-          POSTGRES_PASSWORD: todo
-        ports:
-          - 5432:5432
-        # Without a health check the job can start before Postgres accepts
-        # connections, and the integration suite dies on "connection refused".
-        options: >-
-          --health-cmd "pg_isready -U todo -d todo_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 20
-
     steps:
       - uses: actions/checkout@v7
 
@@ -61,18 +44,10 @@ jobs:
       - name: Set up sbt
         uses: sbt/setup-sbt@v1
 
-      # auto/check runs `sbt shutdownall` first, so the environment below is the
-      # one the test JVM actually sees, then asserts the integration suite
-      # really ran instead of trusting an exit code.
       - name: Run the gate
-        run: ./auto/check --with-db
-        env:
-          TODO_TEST_DB: '1'
-          TODO_TEST_DB_HOST: 127.0.0.1
-          TODO_TEST_DB_PORT: '5432'
-          TODO_TEST_DB_NAME: todo_test
-          TODO_TEST_DB_USER: todo
-          TODO_TEST_DB_PASSWORD: todo
+        # Testcontainers talks to the Docker daemon already available on
+        # GitHub's Ubuntu runner and owns the PostgreSQL lifecycle.
+        run: ./auto/check
 
       - name: Stop the sbt server
         if: always()

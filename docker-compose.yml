@@ -16,24 +16,5 @@ services:
     volumes:
       - todo-pgdata:/var/lib/postgresql/data
 
-  # Second instance on a different port, used by the integration tests so they
-  # never touch a database you care about.
-  postgres-test:
-    image: postgres:16-alpine
-    container_name: todo-postgres-test
-    environment:
-      POSTGRES_DB: todo_test
-      POSTGRES_USER: todo
-      POSTGRES_PASSWORD: todo
-    ports:
-      - "55432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo -d todo_test"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
-    tmpfs:
-      - /var/lib/postgresql/data
-
 volumes:
   todo-pgdata:

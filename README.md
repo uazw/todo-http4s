@@ -13,7 +13,7 @@ effect system, **doobie** for PostgreSQL, **http4s + circe** at the edge.
 | Persistence  | doobie 1.0 + HikariCP + PostgreSQL        |
 | HTTP         | http4s 0.23 (ember server) + circe        |
 | Config       | Typesafe Config (HOCON + env overrides)   |
-| Tests        | munit + munit-cats-effect                 |
+| Tests        | munit + Testcontainers                    |
 
 On the Scala version: this tracks the latest stable release rather than the LTS line. If you would
 rather be on LTS — the usual choice for a library that others compile against, since it is patched
@@ -75,7 +75,7 @@ Two design decisions worth calling out:
 ## Running
 
 ```bash
-# 1. PostgreSQL (creates todo on :5432 and todo_test on :55432)
+# 1. PostgreSQL for the running service
 docker compose up -d
 
 # 2. the service
@@ -156,38 +156,20 @@ Errors are uniform, so a client parses one shape:
 ## Tests
 
 ```bash
-auto/check                       # the gate: every test + format check, no database needed
-auto/check --with-db             # same, plus the PostgreSQL integration suite
+auto/check                       # every test (including PostgreSQL) + format check
 auto/check --help
 ```
 
 `auto/check` is the one command worth remembering: it runs `testFull` and `scalafmtCheckAll`, exits
-non-zero on any failure, and works from any directory. It is the same thing CI runs, so a green
-`auto/check` locally means a green build remotely.
-
-Two deliberate choices in it:
-
-- **It refuses to overstate what it covered.** The integration suite is skipped by `munitIgnore`
-  when `TODO_TEST_DB` is unset, and that skip still exits 0 — so a partial gate looks identical to a
-  full one. Without `--with-db` the script says so explicitly, and with `--with-db` it asserts the
-  suite actually appeared in the output, failing with `check INCONCLUSIVE` rather than reporting a
-  pass it cannot back up.
-- **It shuts down any running sbt server first**, for the reason in the box below.
+non-zero on any failure, and works from any directory. The repository integration spec uses
+Testcontainers to start an isolated `postgres:16-alpine` instance on a random host port and remove
+it after the suite. A Docker-compatible runtime must therefore be running locally. No test database,
+fixed port, or test-specific environment variables need to be managed by hand.
 
 ```bash
-sbt testFull                     # every suite
+sbt testFull                     # every suite; Testcontainers supplies PostgreSQL
 sbt test                         # quick loop: only suites whose inputs changed
-docker compose up -d postgres-test
-TODO_TEST_DB=1 sbt testFull      # adds the doobie integration spec against postgres-test
 ```
-
-> **⚠️ An sbt server pins its environment at startup.** Tests run inside the long-lived sbt server
-> JVM, which inherits the environment it was *started* with — not the environment of the shell that
-> invokes `sbt` next. A server left over from an earlier run makes `TODO_TEST_DB` lie in **both**
-> directions: `TODO_TEST_DB=1 sbt testFull` can print a green run having skipped the database suite
-> entirely, and a bare `sbt testFull` can silently run it against a database you never configured.
-> `sbt shutdownall` before a run that depends on the variable. This is why `auto/check` does it for
-> you, and why trusting a hand-typed `TODO_TEST_DB=1` is a bad idea.
 
 > **sbt 2 splits `test` from `testFull`.** `Test/test` now depends on `Test/testQuick`, so a bare
 > `sbt test` with unchanged inputs prints `Passed: Total 0` / `No tests to run for Test / testQuick`
@@ -231,23 +213,13 @@ pinned in `project/build.properties` (`_2.12_1.0` on the 1.x line, `_sbt2_3` on 
 one job, and it does one thing:
 
 ```yaml
-- run: ./auto/check --with-db
+- run: ./auto/check
 ```
 
-CI deliberately owns no test logic of its own. It starts a `postgres:16-alpine` service (with a
-`pg_isready` health check, so the job cannot race the database's startup), sets up JDK 21 and sbt,
-and calls the same script you run locally. Anything CI catches, `./auto/check --with-db` catches
-first — which is the point.
-
-Two details worth knowing:
-
-- **The port differs from local.** The service container publishes Postgres on `5432`, so the job
-  sets `TODO_TEST_DB_PORT=5432`. Locally, `docker-compose.yml` puts the test database on `55432` to
-  stay clear of the development one. `auto/check` reads the same variable, so it follows along.
-- **`auto/check` retires the sbt server before testing.** That matters here for the reason described
-  under Tests: the test JVM inherits the sbt server's environment, so a stale server would make the
-  database suite silently skip while the job still reported success. The script's own assertion that
-  the suite ran is the backstop.
+CI deliberately owns no test logic of its own. It sets up JDK 21 and sbt, then calls the same script
+you run locally. Testcontainers uses the Docker daemon available on GitHub's standard Ubuntu runner,
+waits for PostgreSQL to become ready, assigns a free host port, and cleans the container up. There is
+no separate GitHub Actions service container or CI-only database configuration.
 
 Dependency caches (`~/.ivy2`, `~/.sbt`, `~/.cache/coursier`) are keyed on `build.sbt`,
 `project/build.properties` and `project/plugins.sbt`, so a build-tool change invalidates them and a

@@ -2,15 +2,16 @@ ThisBuild / scalaVersion := "3.9.0"
 ThisBuild / organization := "dev.alma"
 ThisBuild / version      := "0.1.0-SNAPSHOT"
 
-val CatsEffectVersion = "3.5.7"
-val Http4sVersion     = "0.23.28"
-val CirceVersion      = "0.14.10"
-val DoobieVersion     = "1.0.0-RC5"
-val LogbackVersion    = "1.5.12"
-val TypesafeConfig    = "1.4.3"
-val PostgresVersion   = "42.7.4"
-val MunitVersion      = "1.0.2"
-val MunitCeVersion    = "2.0.0"
+val CatsEffectVersion     = "3.5.7"
+val Http4sVersion         = "0.23.28"
+val CirceVersion          = "0.14.10"
+val DoobieVersion         = "1.0.0-RC5"
+val LogbackVersion        = "1.5.12"
+val TypesafeConfig        = "1.4.3"
+val PostgresVersion       = "42.7.4"
+val MunitVersion          = "1.0.2"
+val MunitCeVersion        = "2.0.0"
+val TestcontainersVersion = "2.0.5"
 
 lazy val root = (project in file("."))
   .settings(
@@ -41,9 +42,10 @@ lazy val root = (project in file("."))
       "com.typesafe"    % "config"                % TypesafeConfig,
       "ch.qos.logback"  % "logback-classic"       % LogbackVersion,
       // tests
-      "org.scalameta"  %% "munit"                 % MunitVersion     % Test,
-      "org.typelevel"  %% "munit-cats-effect"     % MunitCeVersion   % Test,
-      "org.http4s"     %% "http4s-ember-client"   % Http4sVersion    % Test
+      "org.scalameta"      %% "munit"                     % MunitVersion          % Test,
+      "org.typelevel"      %% "munit-cats-effect"         % MunitCeVersion        % Test,
+      "org.http4s"         %% "http4s-ember-client"       % Http4sVersion         % Test,
+      "org.testcontainers"  % "testcontainers-postgresql" % TestcontainersVersion % Test
     ),
     Test / parallelExecution := false,
     run / fork := true,
