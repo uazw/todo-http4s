@@ -9,11 +9,11 @@ effect system, **doobie** for PostgreSQL, **http4s + circe** at the edge.
 | ------------ | ----------------------------------------- |
 | Language     | Scala 3.9.0                               |
 | Build        | sbt 2.0.9                                 |
-| Effects      | cats-effect 3.5                           |
-| Persistence  | doobie 1.0 + HikariCP + PostgreSQL        |
-| HTTP         | http4s 0.23 (ember server) + circe        |
-| Config       | Typesafe Config (HOCON + env overrides)   |
-| Tests        | munit + Testcontainers                    |
+| Effects      | cats-effect 3.7.1                         |
+| Persistence  | doobie 1.0.0-RC12 + HikariCP + PostgreSQL 18 |
+| HTTP         | http4s 0.23.37 (ember server) + circe 0.14.16 |
+| Config       | Typesafe Config 1.4.9 (HOCON + env overrides) |
+| Tests        | munit 1.3.6 + Testcontainers 2.0.5        |
 
 On the Scala version: this tracks the latest stable release rather than the LTS line. If you would
 rather be on LTS — the usual choice for a library that others compile against, since it is patched
@@ -75,14 +75,28 @@ Two design decisions worth calling out:
 ## Running
 
 ```bash
+# Start PostgreSQL, wait for it to become healthy, and run the service
+auto/dev
+```
+
+Press Ctrl-C to stop the service and its PostgreSQL container. The `todo-pgdata-v18` volume is retained,
+so data survives across runs. The old `todo-pgdata` PostgreSQL 16 volume is left untouched for manual recovery;
+it is not migrated automatically.
+
+The equivalent manual commands are:
+
+```bash
 # 1. PostgreSQL for the running service
-docker compose up -d
+docker compose up -d --wait postgres
 
 # 2. the service
 sbt run
 
 # 3. exercise it
 scripts/smoke.sh
+
+# 4. stop PostgreSQL when finished
+docker compose stop postgres
 ```
 
 The schema is applied at boot from `src/main/resources/db/schema.sql`. The DDL is idempotent
@@ -162,7 +176,7 @@ auto/check --help
 
 `auto/check` is the one command worth remembering: it runs `testFull` and `scalafmtCheckAll`, exits
 non-zero on any failure, and works from any directory. The repository integration spec uses
-Testcontainers to start an isolated `postgres:16-alpine` instance on a random host port and remove
+Testcontainers to start an isolated `postgres:18-alpine` instance on a random host port and remove
 it after the suite. A Docker-compatible runtime must therefore be running locally. No test database,
 fixed port, or test-specific environment variables need to be managed by hand.
 
@@ -216,7 +230,7 @@ one job, and it does one thing:
 - run: ./auto/check
 ```
 
-CI deliberately owns no test logic of its own. It sets up JDK 21 and sbt, then calls the same script
+CI deliberately owns no test logic of its own. It sets up JDK 25 and sbt, then calls the same script
 you run locally. Testcontainers uses the Docker daemon available on GitHub's standard Ubuntu runner,
 waits for PostgreSQL to become ready, assigns a free host port, and cleans the container up. There is
 no separate GitHub Actions service container or CI-only database configuration.

@@ -20,7 +20,7 @@ object Validation:
 
   def description(raw: Option[String]): Either[TodoError, Option[String]] =
     Option(raw).flatten.map(_.trim) match
-      case None | Some("") => Right(None)
+      case None | Some("")                                    => Right(None)
       case Some(value) if value.length > MaxDescriptionLength =>
         Left(TodoError.Invalid("description", s"must be at most $MaxDescriptionLength characters"))
       case Some(value) => Right(Some(value))

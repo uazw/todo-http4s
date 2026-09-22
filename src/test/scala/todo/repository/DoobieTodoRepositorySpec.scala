@@ -21,7 +21,7 @@ import todo.domain.*
 class DoobieTodoRepositorySpec extends CatsEffectSuite:
 
   private val postgres =
-    new PostgreSQLContainer("postgres:16-alpine")
+    new PostgreSQLContainer("postgres:18-alpine")
       .withDatabaseName("todo_test")
       .withUsername("todo")
       .withPassword("todo")

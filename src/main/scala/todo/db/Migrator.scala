@@ -18,13 +18,13 @@ object Migrator:
 
   def run[F[_]: MonadCancelThrow](xa: Transactor[F], script: String = DefaultScript): F[Unit] =
     load(script) match
-      case Left(message) => MonadCancelThrow[F].raiseError(new IllegalStateException(message))
+      case Left(message)     => MonadCancelThrow[F].raiseError(new IllegalStateException(message))
       case Right(statements) =>
         statements.traverse_(statement => Fragment.const(statement).update.run.transact(xa)).void
 
   private[db] def load(script: String): Either[String, List[String]] =
     Option(getClass.getClassLoader.getResourceAsStream(script)) match
-      case None => Left(s"migration script '$script' not found on the classpath")
+      case None         => Left(s"migration script '$script' not found on the classpath")
       case Some(stream) =>
         val source = Source.fromInputStream(stream, "UTF-8")
         try
