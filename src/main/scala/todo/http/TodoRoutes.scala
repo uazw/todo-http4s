@@ -59,7 +59,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
     )
 
     parsed match
-      case Left(error) => errorResponse(error)
+      case Left(error)                      => errorResponse(error)
       case Right((filter, (limit, offset))) =>
         complete(service.list(filter, limit, offset))(page => Ok(PageView.from(page)))
 
@@ -98,7 +98,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
   private def optionalStatus(params: Map[String, String]): Either[TodoError, Option[TodoStatus]] =
     params.get("status") match
       case None | Some("") => Right(None)
-      case Some(raw) =>
+      case Some(raw)       =>
         TodoStatus
           .fromWire(raw)
           .toRight(
@@ -109,7 +109,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
   private def optionalInstant(params: Map[String, String], key: String): Either[TodoError, Option[Instant]] =
     params.get(key) match
       case None | Some("") => Right(None)
-      case Some(raw) =>
+      case Some(raw)       =>
         Either
           .catchOnly[Exception](Instant.parse(raw))
           .left
@@ -125,7 +125,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
   ): Either[TodoError, Int] =
     params.get(key) match
       case None | Some("") => Right(default)
-      case Some(raw) =>
+      case Some(raw)       =>
         raw.trim.toIntOption
           .filter(value => value >= min && value <= max)
           .toRight(

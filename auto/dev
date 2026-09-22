@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+#
+# Start PostgreSQL with Docker Compose, then run the service locally.
+# PostgreSQL is stopped when the service exits; its data volume is preserved.
+#
+#   auto/dev
+#   auto/dev --help
+set -euo pipefail
+
+repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+usage() {
+  sed -n '3,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'auto/dev: unknown argument: %s\n\n' "$arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! command -v docker >/dev/null 2>&1; then
+  printf 'auto/dev: Docker is required but was not found on PATH.\n' >&2
+  exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  printf 'auto/dev: Docker Compose is required but is not available.\n' >&2
+  exit 1
+fi
+
+if ! command -v sbt >/dev/null 2>&1; then
+  printf 'auto/dev: sbt is required but was not found on PATH.\n' >&2
+  exit 1
+fi
+
+cleanup() {
+  local exit_status="$1"
+  trap - EXIT
+
+  printf '\n==> stopping PostgreSQL\n'
+  if ! docker compose stop postgres; then
+    printf 'auto/dev: warning: could not stop PostgreSQL.\n' >&2
+  fi
+
+  exit "$exit_status"
+}
+
+trap 'cleanup $?' EXIT
+
+printf '==> starting PostgreSQL and waiting for it to become healthy\n'
+docker compose up -d --wait postgres
+
+printf '\n==> starting todo service on http://localhost:8080\n'
+sbt run

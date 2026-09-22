@@ -84,7 +84,7 @@ object PatchTodoRequest:
 
   def toDomain(request: PatchTodoRequest): Either[TodoError, UpdateTodo] =
     request.status match
-      case None => Right(UpdateTodo(request.title, request.description, None, request.dueAt))
+      case None      => Right(UpdateTodo(request.title, request.description, None, request.dueAt))
       case Some(raw) =>
         TodoStatus
           .fromWire(raw)

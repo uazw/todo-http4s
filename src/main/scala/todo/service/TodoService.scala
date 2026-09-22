@@ -37,7 +37,7 @@ object TodoService:
 
     def create(input: CreateTodo): Result[F, Todo] =
       Validation.createTodo(input) match
-        case Left(error) => Result.raise(error)
+        case Left(error)  => Result.raise(error)
         case Right(valid) =>
           for
             now <- clock.now
@@ -67,10 +67,10 @@ object TodoService:
 
     def update(id: TodoId, patch: UpdateTodo): Result[F, Todo] =
       repository.find(id).flatMap {
-        case None => Result.raise(TodoError.NotFound(id))
+        case None           => Result.raise(TodoError.NotFound(id))
         case Some(existing) =>
           Validation.patch(existing, patch) match
-            case Left(error) => Result.raise(error)
+            case Left(error)    => Result.raise(error)
             case Right(patched) =>
               for
                 now <- clock.now

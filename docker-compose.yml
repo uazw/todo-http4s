@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: todo-postgres
     environment:
       POSTGRES_DB: todo
@@ -14,7 +14,7 @@ services:
       timeout: 3s
       retries: 20
     volumes:
-      - todo-pgdata:/var/lib/postgresql/data
+      - todo-pgdata-v18:/var/lib/postgresql
 
 volumes:
-  todo-pgdata:
+  todo-pgdata-v18:
