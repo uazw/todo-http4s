@@ -1,0 +1,271 @@
+openapi: 3.0.3
+info:
+  title: todo-service API
+  version: 0.1.0
+  description: REST API for creating, finding, updating, and deleting todos.
+servers:
+  - url: /
+paths:
+  /health:
+    get:
+      summary: Check database health
+      operationId: getHealth
+      responses:
+        '200':
+          description: Database is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Database is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /api/todos:
+    get:
+      summary: List todos
+      operationId: listTodos
+      parameters:
+        - name: status
+          in: query
+          description: Canonical status values are shown; the API also accepts in-progress and completed.
+          schema:
+            $ref: '#/components/schemas/TodoStatus'
+        - name: q
+          in: query
+          description: Case-insensitive title and description search.
+          schema:
+            type: string
+        - name: due_before
+          in: query
+          description: Return todos due before this instant.
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: A page of todos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      summary: Create a todo
+      operationId: createTodo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTodo'
+      responses:
+        '201':
+          description: Todo created.
+          headers:
+            Location:
+              description: Path to the new todo.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /api/todos/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get a todo
+      operationId: getTodo
+      responses:
+        '200':
+          description: The todo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      summary: Update a todo
+      operationId: updateTodo
+      description: Omitted fields stay unchanged. Set description or dueAt to null to clear them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchTodo'
+      responses:
+        '200':
+          description: Updated todo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    delete:
+      summary: Delete a todo
+      operationId: deleteTodo
+      responses:
+        '204':
+          description: Todo deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  responses:
+    BadRequest:
+      description: Invalid query, ID, or JSON payload.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Todo does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Internal error.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    TodoStatus:
+      type: string
+      enum: [pending, in_progress, done]
+    Todo:
+      type: object
+      required: [id, title, description, status, dueAt, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/TodoStatus'
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TodoPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Todo'
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+        offset:
+          type: integer
+    CreateTodo:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Whitespace is trimmed; a blank title is rejected.
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+    PatchTodo:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        status:
+          $ref: '#/components/schemas/TodoStatus'
+        dueAt:
+          type: string
+          format: date-time
+          nullable: true
+    Error:
+      type: object
+      required: [error, message, field]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_json, not_found, internal_error]
+        message:
+          type: string
+        field:
+          type: string
+          nullable: true
+    Health:
+      type: object
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        database:
+          type: string
+          enum: [up, down]

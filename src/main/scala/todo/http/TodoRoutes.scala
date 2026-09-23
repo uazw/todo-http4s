@@ -1,6 +1,6 @@
 package todo.http
 
-import cats.effect.Concurrent
+import cats.effect.Async
 import cats.syntax.all.*
 import java.time.Instant
 import org.http4s.*
@@ -11,12 +11,18 @@ import todo.db.HealthCheck
 import todo.domain.*
 import todo.service.TodoService
 
-/** HTTP edge. It does three things and nothing else: turn a request into domain input, call the service algebra, turn
-  * the `TodoError` back into a status code.
+/** HTTP edge: serves API docs, turns requests into domain input, calls the service algebra, and maps `TodoError` onto
+  * status codes.
   */
-final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: HealthCheck[F]) extends Http4sDsl[F]:
+final class TodoRoutes[F[_]: Async](service: TodoService[F], health: HealthCheck[F]) extends Http4sDsl[F]:
 
   val routes: HttpRoutes[F] = HttpRoutes.of[F] {
+
+    case req @ GET -> Root / "docs" =>
+      StaticFile.fromResource[F]("/swagger-ui/index.html", Some(req)).getOrElseF(NotFound())
+
+    case req @ GET -> Root / "openapi.yaml" =>
+      StaticFile.fromResource[F]("/openapi.yaml", Some(req)).getOrElseF(NotFound())
 
     case GET -> Root / "health" =>
       health.isHealthy.flatMap { databaseUp =>
@@ -85,7 +91,7 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
 
   /** Runs the service call and maps its error channel onto an HTTP response. */
   private def complete[A](result: Result[F, A])(onSuccess: A => F[Response[F]]): F[Response[F]] =
-    Concurrent[F].flatMap(result) {
+    Async[F].flatMap(result) {
       case Right(value) => onSuccess(value)
       case Left(error)  => errorResponse(error)
     }
@@ -134,5 +140,5 @@ final class TodoRoutes[F[_]: Concurrent](service: TodoService[F], health: Health
 
 object TodoRoutes:
 
-  def apply[F[_]: Concurrent](service: TodoService[F], health: HealthCheck[F]): TodoRoutes[F] =
+  def apply[F[_]: Async](service: TodoService[F], health: HealthCheck[F]): TodoRoutes[F] =
     new TodoRoutes[F](service, health)
