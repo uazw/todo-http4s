@@ -124,6 +124,8 @@ TODO_HTTP_PORT=9000 TODO_DB_PASSWORD=secret sbt run
 | Method   | Path                | Notes                                                        |
 | -------- | ------------------- | ------------------------------------------------------------ |
 | `GET`    | `/health`           | `200` when the database answers, `503` otherwise             |
+| `GET`    | `/docs`             | Swagger UI for this API                                      |
+| `GET`    | `/openapi.yaml`     | OpenAPI 3 specification                                      |
 | `POST`   | `/api/todos`        | `201` + `Location`; body `{"title", "description?", "dueAt?"}` |
 | `GET`    | `/api/todos`        | `?status=&q=&due_before=&limit=&offset=` → page envelope      |
 | `GET`    | `/api/todos/{id}`   | `200` / `404`                                                |
@@ -132,6 +134,10 @@ TODO_HTTP_PORT=9000 TODO_DB_PASSWORD=secret sbt run
 
 `status` is one of `pending`, `in_progress`, `done` (the parser also accepts `in-progress` and
 `completed`). Instants are ISO-8601, e.g. `2026-01-31T09:00:00Z`.
+
+Open [Swagger UI](http://localhost:8080/docs) after starting the service. The page loads its pinned
+Swagger UI scripts and stylesheet from a CDN, so the browser needs internet access; the OpenAPI spec
+and API requests stay on the service's origin.
 
 ```bash
 curl -sX POST localhost:8080/api/todos \

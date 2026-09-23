@@ -25,6 +25,23 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   private def body(response: Response[IO]): IO[Json] =
     response.as[Json]
 
+  test("GET /docs serves the CDN-backed UI and its OpenAPI document") {
+    withStack { f =>
+      for
+        docs <- send(f, Request[IO](Method.GET, uri"/docs"))
+        html <- docs.as[String]
+        spec <- send(f, Request[IO](Method.GET, uri"/openapi.yaml"))
+        yaml <- spec.as[String]
+      yield
+        assertEquals(docs.status, Status.Ok)
+        assert(html.contains("swagger-ui-dist@5.33.0/swagger-ui-bundle.js"))
+        assert(html.contains("url: \"/openapi.yaml\""))
+        assertEquals(spec.status, Status.Ok)
+        assert(yaml.contains("openapi: 3.0.3"))
+        assert(yaml.contains("/api/todos/{id}:"))
+    }
+  }
+
   test("POST /api/todos creates a todo and returns 201 with a Location header") {
     withStack { f =>
       val request = Request[IO](Method.POST, uri"/api/todos")
