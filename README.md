@@ -26,37 +26,55 @@ full suite; nothing else in the build needs to change either way.
 auto/check                         # the gate: testFull + scalafmtCheckAll
 scripts/smoke.sh                   # end-to-end HTTP checks against a running instance
 src/main/scala/todo/
-├── Main.scala                     # object graph as a Resource, ember server, request logging
-├── config/AppConfig.scala         # HOCON + env vars, validated with readable errors
 ├── domain/                        # pure: no cats, no doobie, no http4s
 │   ├── Todo.scala                 # Todo, TodoStatus, CreateTodo, UpdateTodo, TodoFilter, Page
-│   ├── TodoError.scala            # every failure the service expresses on purpose
-│   ├── Result.scala               # type Result[F, A] = F[Either[TodoError, A]]
+│   ├── TodoError.scala            # NotFound, Invalid
 │   └── Validation.scala           # pure payload rules, shared by every interface
-├── runtime/Clock.scala            # Clock[F] and IdGen[F] algebras (+ deterministic test impls)
-├── repository/
-│   ├── TodoRepository.scala       # the persistence algebra
-│   └── DoobieTodoRepository.scala # its doobie interpreter
-├── service/TodoService.scala      # the use-case algebra and its implementation
-├── http/
-│   ├── Json.scala                 # request/response DTOs and codecs
-│   └── TodoRoutes.scala           # routes; maps TodoError onto status codes
-└── db/                            # transactor, schema bootstrap, health check
+├── application/
+│   ├── port/
+│   │   ├── in/                    # driving ports
+│   │   │   ├── TodoService.scala  # the use-case algebra
+│   │   │   └── Result.scala       # type Result[F, A] = F[Either[TodoError, A]]
+│   │   └── out/                   # driven ports
+│   │       ├── TodoRepository.scala # persistence algebra
+│   │       ├── Clock.scala        # time algebra
+│   │       └── IdGen.scala        # identifier generation algebra
+│   └── TodoServiceImpl.scala      # application service implementing TodoService[F]
+├── adapter/
+│   ├── in/http/                   # driving adapters
+│   │   ├── TodoRoutes.scala       # HTTP API; maps TodoError onto status codes
+│   │   ├── HealthRoutes.scala     # GET /health operational probe
+│   │   ├── DocsRoutes.scala       # GET /docs, /openapi.yaml
+│   │   ├── Json.scala             # request/response DTOs and codecs
+│   │   ├── StatusCodec.scala      # tolerant HTTP-layer status encoding/parsing
+│   │   └── RequestLogging.scala   # HTTP access logging middleware
+│   └── out/                       # driven adapters
+│       ├── postgres/              # PostgreSQL / doobie adapter
+│       │   ├── DoobieTodoRepository.scala
+│       │   ├── StatusColumn.scala # strict DB column Meta mapping
+│       │   ├── PostgresPing.scala # DB liveness probe
+│       │   ├── Database.scala     # transactor pool
+│       │   └── Migrator.scala     # schema bootstrap
+│       └── system/                # production system adapters
+│           ├── SystemClock.scala
+│           └── RandomIdGen.scala
+└── boot/                          # composition root
+    ├── Main.scala                 # wires the object graph as a Resource & starts Ember server
+    └── AppConfig.scala            # HOCON + env vars, validated with readable errors
 ```
 
 ## Architecture
 
-Each layer is an algebra — a trait parameterised by a **type constructor** `F[_]` — plus at least
-one interpreter. Nothing in `service/` or `http/` mentions `ConnectionIO`, and nothing in
-`repository/` mentions `Request` or `Response`. Swapping PostgreSQL for something else means
-writing one new implementation of `TodoRepository[F]`, nothing more.
+The codebase follows the **Ports and Adapters (Hexagonal)** architecture:
 
-```
-TodoRoutes[F]  ──►  TodoService[F]  ──►  TodoRepository[F]
-                        │                     │
-                        ├─ Clock[F]           └─ DoobieTodoRepository[F]  (Postgres)
-                        └─ IdGen[F]              InMemoryTodoRepository[F] (tests)
-```
+- **Domain (`domain/`)**: Pure business entities and rules. Completely independent of framework dependencies.
+- **Application Core (`application/`)**: Inbound ports (`port/in/`) define use cases offered to driving adapters. Outbound ports (`port/out/`) define dependencies required by the business logic. `TodoServiceImpl` orchestrates the use cases.
+- **Adapters (`adapter/`)**:
+  - **Inbound (`adapter/in/http/`)**: Converts external HTTP requests into calls on inbound ports.
+  - **Outbound (`adapter/out/`)**: Adapters for PostgreSQL and system runtime providing implementations for outbound ports.
+- **Boot (`boot/`)**: Composition root where configurations and adapters are wired together.
+
+Operational concerns like `/health` (`HealthRoutes`) sit beside business routes and probe the database directly without polluting the domain or application use cases.
 
 Errors travel in the **value channel** as `Result[F, A] = F[Either[TodoError, A]]`, so
 "not found" and "invalid title" are typed outcomes rather than exceptions. Only genuine

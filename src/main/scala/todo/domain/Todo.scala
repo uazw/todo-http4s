@@ -3,25 +3,15 @@ package todo.domain
 import java.time.Instant
 import java.util.UUID
 
-/** Lifecycle state of a todo item. */
+/** Lifecycle state of a todo item.
+  *
+  * Deliberately has no textual form: each adapter owns its own representation (the HTTP adapter is tolerant on input,
+  * the Postgres adapter is strict), so changing one never silently changes the other.
+  */
 enum TodoStatus:
   case Pending, InProgress, Done
 
 object TodoStatus:
-
-  /** Canonical representation used on the wire and in the database. */
-  def toWire(status: TodoStatus): String = status match
-    case Pending    => "pending"
-    case InProgress => "in_progress"
-    case Done       => "done"
-
-  /** Tolerant parser: accepts `in-progress`, `In Progress`, `completed`, ... */
-  def fromWire(value: String): Option[TodoStatus] =
-    value.trim.toLowerCase.replace('-', '_').replace(' ', '_') match
-      case "pending"                         => Some(Pending)
-      case "in_progress" | "inprogress"      => Some(InProgress)
-      case "done" | "complete" | "completed" => Some(Done)
-      case _                                 => None
 
   val all: List[TodoStatus] = List(Pending, InProgress, Done)
 
