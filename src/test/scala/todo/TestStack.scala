@@ -1,16 +1,18 @@
 package todo
 
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import java.time.{Duration, Instant}
 import java.util.UUID
-import todo.db.HealthCheck
-import todo.http.TodoRoutes
-import todo.repository.{InMemoryTodoRepository, TodoRepository}
-import todo.runtime.{Clock, IdGen}
-import todo.service.TodoService
+import org.http4s.HttpApp
+import todo.adapter.in.http.{DocsRoutes, HealthRoutes, TodoRoutes}
+import todo.adapter.out.fake.{FakeClock, FakeIdGen, InMemoryTodoRepository}
+import todo.application.TodoServiceImpl
+import todo.application.port.in.TodoService
+import todo.application.port.out.TodoRepository
 import todo.domain.Todo
 
-/** Wires the same object graph as `Main`, but with deterministic time and ids and no database. */
+/** Wires the test stack with in-memory adapters and deterministic time/ids. */
 object TestStack:
 
   val Epoch: Instant = Instant.parse("2026-01-01T00:00:00Z")
@@ -18,19 +20,25 @@ object TestStack:
   final case class Fixture(
       repository: TodoRepository[IO],
       service: TodoService[IO],
-      routes: TodoRoutes[IO]
+      todoRoutes: TodoRoutes[IO],
+      healthRoutes: HealthRoutes[IO],
+      docsRoutes: DocsRoutes[IO]
   ):
-    def http = routes.routes.orNotFound
+    def http: HttpApp[IO] = (docsRoutes.routes <+> healthRoutes.routes <+> todoRoutes.routes).orNotFound
 
   def create(
       start: Instant = Epoch,
       step: Duration = Duration.ofSeconds(1),
-      namespace: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000aa")
+      namespace: UUID = UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
+      isHealthy: IO[Boolean] = IO.pure(true)
   ): IO[Fixture] =
     for
       state <- Ref.of[IO, Map[todo.domain.TodoId, Todo]](Map.empty)
-      clock <- Clock.stepping[IO](start, step)
-      ids <- IdGen.sequential[IO](namespace)
+      clock <- FakeClock.stepping[IO](start, step)
+      ids <- FakeIdGen.sequential[IO](namespace)
       repository = InMemoryTodoRepository[IO](state)
-      service = TodoService.make[IO](repository, clock, ids)
-    yield Fixture(repository, service, TodoRoutes[IO](service, HealthCheck.alwaysHealthy[IO]))
+      service = TodoServiceImpl[IO](repository, clock, ids)
+      todoRoutes = TodoRoutes[IO](service)
+      healthRoutes = HealthRoutes[IO](isHealthy)
+      docsRoutes = DocsRoutes[IO]
+    yield Fixture(repository, service, todoRoutes, healthRoutes, docsRoutes)
