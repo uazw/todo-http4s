@@ -9,8 +9,9 @@ object FakeIdGen:
 
   /** Deterministic UUIDs derived from `namespace` + a monotonic counter. */
   def sequential[F[_]: Sync](namespace: UUID): F[IdGen[F]] =
-    Ref[F].of(0L).map { counter =>
-      new IdGen[F]:
-        def next: F[UUID] =
-          counter.getAndUpdate(_ + 1L).map(n => new UUID(namespace.getMostSignificantBits, n))
-    }
+    Ref[F]
+      .of(0L)
+      .map: counter =>
+        new IdGen[F]:
+          def next: F[UUID] =
+            counter.getAndUpdate(_ + 1L).map(n => new UUID(namespace.getMostSignificantBits, n))

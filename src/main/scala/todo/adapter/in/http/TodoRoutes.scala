@@ -14,7 +14,7 @@ import todo.domain.*
   */
 final class TodoRoutes[F[_]: Async](service: TodoService[F]) extends Http4sDsl[F]:
 
-  val routes: HttpRoutes[F] = HttpRoutes.of[F] {
+  val routes: HttpRoutes[F] = HttpRoutes.of[F]:
 
     case req @ GET -> Root / "api" / "todos" =>
       listTodos(req)
@@ -33,7 +33,6 @@ final class TodoRoutes[F[_]: Async](service: TodoService[F]) extends Http4sDsl[F
 
     case GET -> Root / "api" / "todos" / _ =>
       BadRequest(ErrorView.of("invalid_request", "id must be a UUID"))
-  }
 
   private def listTodos(req: Request[F]): F[Response[F]] =
     val params = req.uri.query.params
@@ -53,31 +52,34 @@ final class TodoRoutes[F[_]: Async](service: TodoService[F]) extends Http4sDsl[F
         complete(service.list(filter, limit, offset))(page => Ok(PageView.from(page)))
 
   private def create(req: Request[F]): F[Response[F]] =
-    req.attemptAs[CreateTodoRequest].value.flatMap {
-      case Left(failure) =>
-        BadRequest(ErrorView.of("invalid_json", failure.message))
-      case Right(body) =>
-        complete(service.create(CreateTodoRequest.toDomain(body))) { todo =>
-          Created(TodoView.from(todo)).map(_.putHeaders(Location(Uri.unsafeFromString(s"/api/todos/${todo.id.value}"))))
-        }
-    }
+    req
+      .attemptAs[CreateTodoRequest]
+      .value
+      .flatMap:
+        case Left(failure) =>
+          BadRequest(ErrorView.of("invalid_json", failure.message))
+        case Right(body) =>
+          complete(service.create(CreateTodoRequest.toDomain(body))): todo =>
+            Created(TodoView.from(todo))
+              .map(_.putHeaders(Location(Uri.unsafeFromString(s"/api/todos/${todo.id.value}"))))
 
   private def patch(req: Request[F], id: TodoId): F[Response[F]] =
-    req.attemptAs[PatchTodoRequest].value.flatMap {
-      case Left(failure) =>
-        BadRequest(ErrorView.of("invalid_json", failure.message))
-      case Right(body) =>
-        PatchTodoRequest.toDomain(body) match
-          case Left(error)   => errorResponse(error)
-          case Right(update) => complete(service.update(id, update))(todo => Ok(TodoView.from(todo)))
-    }
+    req
+      .attemptAs[PatchTodoRequest]
+      .value
+      .flatMap:
+        case Left(failure) =>
+          BadRequest(ErrorView.of("invalid_json", failure.message))
+        case Right(body) =>
+          PatchTodoRequest.toDomain(body) match
+            case Left(error)   => errorResponse(error)
+            case Right(update) => complete(service.update(id, update))(todo => Ok(TodoView.from(todo)))
 
   /** Runs the service call and maps its error channel onto an HTTP response. */
   private def complete[A](result: Result[F, A])(onSuccess: A => F[Response[F]]): F[Response[F]] =
-    Async[F].flatMap(result) {
+    Async[F].flatMap(result):
       case Right(value) => onSuccess(value)
       case Left(error)  => errorResponse(error)
-    }
 
   private def errorResponse(error: TodoError): F[Response[F]] = error match
     case TodoError.NotFound(_)   => NotFound(ErrorView.of("not_found", error.message))

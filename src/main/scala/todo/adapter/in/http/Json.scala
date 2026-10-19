@@ -45,13 +45,12 @@ final case class CreateTodoRequest(
 )
 
 object CreateTodoRequest:
-  given Decoder[CreateTodoRequest] = Decoder.instance { c =>
+  given Decoder[CreateTodoRequest] = Decoder.instance: c =>
     for
       title <- c.get[String]("title")
       description <- c.get[Option[String]]("description")
       dueAt <- c.get[Option[Instant]]("dueAt")
     yield CreateTodoRequest(title, description, dueAt)
-  }
 
   def toDomain(request: CreateTodoRequest): CreateTodo =
     CreateTodo(request.title, request.description, request.dueAt)
@@ -73,22 +72,22 @@ object PatchTodoRequest:
     if field.succeeded then field.as[Option[A]].map(Some(_))
     else Right(None)
 
-  given Decoder[PatchTodoRequest] = Decoder.instance { c =>
+  given Decoder[PatchTodoRequest] = Decoder.instance: c =>
     for
       title <- c.get[Option[String]]("title")
       description <- patchField[String](c, "description")
       status <- c.get[Option[String]]("status")
       dueAt <- patchField[Instant](c, "dueAt")
     yield PatchTodoRequest(title, description, status, dueAt)
-  }
 
   def toDomain(request: PatchTodoRequest): Either[TodoError, UpdateTodo] =
     request.status match
       case None      => Right(UpdateTodo(request.title, request.description, None, request.dueAt))
       case Some(raw) =>
-        StatusCodec.parseField("status", raw).map { status =>
-          UpdateTodo(request.title, request.description, Some(status), request.dueAt)
-        }
+        StatusCodec
+          .parseField("status", raw)
+          .map: status =>
+            UpdateTodo(request.title, request.description, Some(status), request.dueAt)
 
 final case class ErrorView(error: String, message: String, field: Option[String] = None)
 
@@ -108,9 +107,8 @@ private[http] object JsonSupport:
   /** Renders a decode failure as `dueAt: Invalid date-time format`, say. */
   def decodingFailureMessage(failure: DecodingFailure): String =
     val path = failure.history.reverse
-      .flatMap {
+      .flatMap:
         case io.circe.CursorOp.DownField(name) => Some(name)
         case _                                 => None
-      }
       .mkString(".")
     if path.isEmpty then failure.message else s"$path: ${failure.message}"

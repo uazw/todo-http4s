@@ -230,6 +230,17 @@ Formatting is enforced by [scalafmt](https://scalameta.org/scalafmt/) through th
 plugin, configured in `.scalafmt.conf` (Scala 3 dialect, 120 columns). The formatter version lives in
 that file and is downloaded on demand — the plugin only supplies the sbt tasks.
 
+The same config pins the indentation style: `rewrite.scala3.optionalBraces` strips the braces Scala 3
+lets you replace with indentation, and its `fewerBraces` check converts trailing block arguments
+(`test("name") { ... }` → `test("name"):`). Because the rewrite happens inside the formatter, a brace
+block that could be braceless is simply *unformatted* — `scalafmtCheckAll` reports it like any other
+formatting drift, so the style is enforced rather than suggested.
+
+Braces that survive are the ones the language still needs: `import` selectors, and anything inside a
+string literal (interpolations, logging patterns, HOCON fixtures). One shape needs care — a curried
+call whose two arguments are both brace blocks, `f { ... } { ... }`: the rewrite would emit an invalid
+`}:`, so give those arguments names or pass them in parentheses.
+
 ```bash
 sbt scalafmtCheckAll   # verify every file matches the config — exits non-zero and names each offender
 sbt scalafmtAll        # rewrite the files in place

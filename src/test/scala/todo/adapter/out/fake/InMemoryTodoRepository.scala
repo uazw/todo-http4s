@@ -20,21 +20,19 @@ final class InMemoryTodoRepository[F[_]: Sync](state: Ref[F, Map[TodoId, Todo]])
     state.get.map(_.get(id))
 
   def list(filter: TodoFilter, limit: Int, offset: Int): F[List[Todo]] =
-    state.get.map { todos =>
+    state.get.map: todos =>
       todos.values.toList
         .filter(matches(filter))
         .sortBy(todo => (-todo.createdAt.toEpochMilli, todo.id.value.toString))
         .slice(offset, offset + limit)
-    }
 
   def count(filter: TodoFilter): F[Long] =
     state.get.map(_.values.count(matches(filter)).toLong)
 
   def replace(todo: Todo): F[Option[Todo]] =
-    state.modify { todos =>
+    state.modify: todos =>
       if todos.contains(todo.id) then (todos + (todo.id -> todo), Some(todo))
       else (todos, None)
-    }
 
   def delete(id: TodoId): F[Boolean] =
     state.modify(todos => (todos - id, todos.contains(id)))
@@ -42,10 +40,12 @@ final class InMemoryTodoRepository[F[_]: Sync](state: Ref[F, Map[TodoId, Todo]])
   private def matches(filter: TodoFilter)(todo: Todo): Boolean =
     filter.status.forall(_ == todo.status) &&
       filter.dueBefore.forall(due => todo.dueAt.exists(!_.isAfter(due))) &&
-      filter.search.map(_.trim.toLowerCase).filter(_.nonEmpty).forall { needle =>
-        todo.title.toLowerCase.contains(needle) ||
-        todo.description.exists(_.toLowerCase.contains(needle))
-      }
+      filter.search
+        .map(_.trim.toLowerCase)
+        .filter(_.nonEmpty)
+        .forall: needle =>
+          todo.title.toLowerCase.contains(needle) ||
+            todo.description.exists(_.toLowerCase.contains(needle))
 
 object InMemoryTodoRepository:
 

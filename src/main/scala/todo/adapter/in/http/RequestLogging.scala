@@ -10,16 +10,15 @@ object RequestLogging:
   private val logger = LoggerFactory.getLogger("todo.http.RequestLogging")
 
   def apply(app: HttpApp[IO]): HttpApp[IO] =
-    Kleisli { request =>
-      IO.monotonic.flatMap { started =>
-        app.run(request).attempt.flatMap { outcome =>
-          IO.monotonic.flatMap { finished =>
-            val elapsedMs = (finished - started).toMillis
-            val line = outcome match
-              case Right(response) => s"${request.method.name} ${request.uri} ${response.status.code} ${elapsedMs}ms"
-              case Left(error) => s"${request.method.name} ${request.uri} FAILED ${elapsedMs}ms — ${error.getMessage}"
-            IO(logger.info(line)) *> IO.fromEither(outcome)
-          }
-        }
-      }
-    }
+    Kleisli: request =>
+      IO.monotonic.flatMap: started =>
+        app
+          .run(request)
+          .attempt
+          .flatMap: outcome =>
+            IO.monotonic.flatMap: finished =>
+              val elapsedMs = (finished - started).toMillis
+              val line = outcome match
+                case Right(response) => s"${request.method.name} ${request.uri} ${response.status.code} ${elapsedMs}ms"
+                case Left(error) => s"${request.method.name} ${request.uri} FAILED ${elapsedMs}ms — ${error.getMessage}"
+              IO(logger.info(line)) *> IO.fromEither(outcome)

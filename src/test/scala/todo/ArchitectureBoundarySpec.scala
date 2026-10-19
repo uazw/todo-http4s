@@ -25,7 +25,7 @@ class ArchitectureBoundarySpec extends munit.FunSuite:
         .toList
     finally src.close()
 
-  test("domain layer must not depend on external frameworks or other application/adapter layers") {
+  test("domain layer must not depend on external frameworks or other application/adapter layers"):
     val domainFiles = listScalaFiles(new File(mainSrcDir, "domain"))
     assert(domainFiles.nonEmpty, "domain files must exist")
 
@@ -48,9 +48,8 @@ class ArchitectureBoundarySpec extends munit.FunSuite:
         !imp.startsWith(forbidden),
         s"Domain file ${file.getPath} violates architecture boundary by importing '$imp'"
       )
-  }
 
-  test("application layer must not depend on adapters or boot/infrastructure") {
+  test("application layer must not depend on adapters or boot/infrastructure"):
     val appFiles = listScalaFiles(new File(mainSrcDir, "application"))
     assert(appFiles.nonEmpty, "application files must exist")
 
@@ -71,9 +70,8 @@ class ArchitectureBoundarySpec extends munit.FunSuite:
         !imp.startsWith(forbidden),
         s"Application file ${file.getPath} violates architecture boundary by importing '$imp'"
       )
-  }
 
-  test("inbound HTTP adapter must not depend on outbound adapters or database drivers") {
+  test("inbound HTTP adapter must not depend on outbound adapters or database drivers"):
     val httpFiles = listScalaFiles(new File(mainSrcDir, "adapter/in/http"))
     assert(httpFiles.nonEmpty, "http adapter files must exist")
 
@@ -92,9 +90,8 @@ class ArchitectureBoundarySpec extends munit.FunSuite:
         !imp.startsWith(forbidden),
         s"HTTP adapter file ${file.getPath} violates architecture boundary by importing '$imp'"
       )
-  }
 
-  test("outbound adapters must not depend on inbound adapters") {
+  test("outbound adapters must not depend on inbound adapters"):
     val outFiles = listScalaFiles(new File(mainSrcDir, "adapter/out"))
     assert(outFiles.nonEmpty, "outbound adapter files must exist")
 
@@ -112,4 +109,3 @@ class ArchitectureBoundarySpec extends munit.FunSuite:
         !imp.startsWith(forbidden),
         s"Outbound adapter file ${file.getPath} violates architecture boundary by importing '$imp'"
       )
-  }

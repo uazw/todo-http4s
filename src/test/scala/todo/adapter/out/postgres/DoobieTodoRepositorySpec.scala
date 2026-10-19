@@ -45,11 +45,10 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
 
   /** Fresh schema per test — the table is truncated, not the database dropped. */
   private def withRepository[A](body: TodoRepository[IO] => IO[A]): IO[A] =
-    transactor.use { xa =>
+    transactor.use: xa =>
       Migrator.run[IO](xa) *>
         sql"TRUNCATE todos".update.run.transact(xa) *>
         body(DoobieTodoRepository[IO](xa))
-    }
 
   private def todo(
       title: String,
@@ -60,8 +59,8 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
   ): Todo =
     Todo(TodoId(UUID.randomUUID()), title, description, status, dueAt, createdAt, createdAt)
 
-  test("insert then find round-trips every column, including timestamps with sub-second precision") {
-    withRepository { repository =>
+  test("insert then find round-trips every column, including timestamps with sub-second precision"):
+    withRepository: repository =>
       val created = todo("round trip", description = Some("with details")).copy(
         dueAt = Some(Instant.parse("2026-02-14T08:30:15.123456Z"))
       )
@@ -71,17 +70,13 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
       yield
         assertEquals(loaded, Some(created))
         assertEquals(loaded.flatMap(_.dueAt).map(_.getNano), Some(123456000))
-    }
-  }
 
-  test("find returns None for an id that was never stored") {
-    withRepository { repository =>
+  test("find returns None for an id that was never stored"):
+    withRepository: repository =>
       repository.find(TodoId(UUID.randomUUID())).map(loaded => assertEquals(loaded, None))
-    }
-  }
 
-  test("timestamps survive a JVM in a non-UTC zone") {
-    withRepository { repository =>
+  test("timestamps survive a JVM in a non-UTC zone"):
+    withRepository: repository =>
       val instant = Instant.parse("2026-07-04T23:45:00Z")
       val stored = todo("timezone", createdAt = instant).copy(dueAt = Some(instant))
       for
@@ -91,11 +86,9 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         assertEquals(loaded.map(_.createdAt), Some(instant))
         assertEquals(loaded.flatMap(_.dueAt), Some(instant))
         assertEquals(loaded.map(_.createdAt.atOffset(ZoneOffset.UTC)), Some(instant.atOffset(ZoneOffset.UTC)))
-    }
-  }
 
-  test("list orders newest first and paginates") {
-    withRepository { repository =>
+  test("list orders newest first and paginates"):
+    withRepository: repository =>
       val base = Instant.parse("2026-01-01T00:00:00Z")
       val todos = (1 to 5).toList.map(i => todo(s"item $i", createdAt = base.plusSeconds(i.toLong)))
       for
@@ -107,11 +100,9 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         assertEquals(first.map(_.title), List("item 5", "item 4"))
         assertEquals(next.map(_.title), List("item 3", "item 2"))
         assertEquals(total, 5L)
-    }
-  }
 
-  test("filters by status, due date and free text") {
-    withRepository { repository =>
+  test("filters by status, due date and free text"):
+    withRepository: repository =>
       val base = Instant.parse("2026-01-01T00:00:00Z")
       for
         _ <- repository.insert(
@@ -128,11 +119,9 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         assertEquals(search.map(_.title).sorted, List("buy bread", "buy milk"))
         assertEquals(byDescription.map(_.title), List("buy milk"))
         assertEquals(due.map(_.title), List("buy milk"))
-    }
-  }
 
-  test("a literal % in the search term is not a wildcard") {
-    withRepository { repository =>
+  test("a literal % in the search term is not a wildcard"):
+    withRepository: repository =>
       for
         _ <- repository.insert(todo("100% done"))
         _ <- repository.insert(todo("nothing here"))
@@ -141,11 +130,9 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
       yield
         assertEquals(hits.map(_.title), List("100% done"))
         assertEquals(misses.map(_.title), List("100% done"))
-    }
-  }
 
-  test("replace updates in place and reports a missing row") {
-    withRepository { repository =>
+  test("replace updates in place and reports a missing row"):
+    withRepository: repository =>
       val original = todo("original")
       val edited =
         original.copy(title = "edited", status = TodoStatus.Done, dueAt = Some(Instant.parse("2026-05-05T05:05:05Z")))
@@ -158,11 +145,9 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         assertEquals(updated, Some(edited))
         assertEquals(loaded, Some(edited))
         assertEquals(missing, None)
-    }
-  }
 
-  test("delete reports whether a row was removed") {
-    withRepository { repository =>
+  test("delete reports whether a row was removed"):
+    withRepository: repository =>
       val stored = todo("temporary")
       for
         _ <- repository.insert(stored)
@@ -173,38 +158,33 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         assertEquals(first, true)
         assertEquals(second, false)
         assertEquals(remaining, 0L)
-    }
-  }
 
-  test("a duplicate id is an infrastructure failure, not a silent overwrite") {
-    withRepository { repository =>
+  test("a duplicate id is an infrastructure failure, not a silent overwrite"):
+    withRepository: repository =>
       val stored = todo("unique")
-      repository.insert(stored) *> repository.insert(stored).attempt.map { outcome =>
-        assert(outcome.isLeft, "inserting the same primary key twice must fail")
-      }
-    }
-  }
+      repository.insert(stored) *> repository
+        .insert(stored)
+        .attempt
+        .map: outcome =>
+          assert(outcome.isLeft, "inserting the same primary key twice must fail")
 
-  test("schema bootstrap is idempotent") {
-    withRepository { repository =>
+  test("schema bootstrap is idempotent"):
+    withRepository: repository =>
       // `withRepository` has already applied the schema once; applying it again
       // must not fail on the existing table or indexes.
-      transactor.use { xa =>
+      transactor.use: xa =>
         Migrator.run[IO](xa) *> Migrator
           .run[IO](xa) *> repository.count(TodoFilter.all).map(total => assertEquals(total, 0L))
-      }
-    }
-  }
 
-  test("corrupt status in database fails the read rather than silently falling back") {
-    transactor.use { xa =>
+  test("corrupt status in database fails the read rather than silently falling back"):
+    transactor.use: xa =>
       val id = UUID.randomUUID()
       val insertCorrupt =
         sql"""INSERT INTO todos (id, title, status, created_at, updated_at)
               VALUES ($id, 'corrupt', 'unknown_status', now(), now())""".update.run.transact(xa)
 
-      insertCorrupt *> DoobieTodoRepository[IO](xa).find(TodoId(id)).attempt.map { outcome =>
-        assert(outcome.isLeft, "reading a row with an unknown status must fail")
-      }
-    }
-  }
+      insertCorrupt *> DoobieTodoRepository[IO](xa)
+        .find(TodoId(id))
+        .attempt
+        .map: outcome =>
+          assert(outcome.isLeft, "reading a row with an unknown status must fail")
