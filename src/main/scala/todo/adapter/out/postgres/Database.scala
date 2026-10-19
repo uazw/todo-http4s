@@ -14,7 +14,7 @@ object Database:
     * dedicated pool of their own — the compute pool is never blocked waiting on a query.
     */
   def transactor[F[_]: Async](config: DatabaseConfig): Resource[F, Transactor[F]] =
-    blockingPool[F](math.max(2, config.poolSize), "todo-db").flatMap { connectEC =>
+    blockingPool[F](math.max(2, config.poolSize), "todo-db").flatMap: connectEC =>
       val hikari = new HikariConfig()
       hikari.setPoolName("todo-pool")
       hikari.setDriverClassName("org.postgresql.Driver")
@@ -26,7 +26,6 @@ object Database:
       hikari.setAutoCommit(true)
 
       HikariTransactor.fromHikariConfigCustomEc[F](hikari, connectEC)
-    }
 
   private def blockingPool[F[_]: Sync](size: Int, name: String): Resource[F, ExecutionContext] =
     Resource

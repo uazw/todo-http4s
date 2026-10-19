@@ -46,17 +46,18 @@ final class TodoServiceImpl[F[_]: Monad](
     yield Right(Page(items, total, effectiveLimit, effectiveOffset))
 
   def update(id: TodoId, patch: UpdateTodo): Result[F, Todo] =
-    repository.find(id).flatMap {
-      case None           => Result.raise(TodoError.NotFound(id))
-      case Some(existing) =>
-        Validation.patch(existing, patch) match
-          case Left(error)    => Result.raise(error)
-          case Right(patched) =>
-            for
-              now <- clock.now
-              saved <- repository.replace(patched.copy(updatedAt = now))
-            yield saved.toRight(TodoError.NotFound(id))
-    }
+    repository
+      .find(id)
+      .flatMap:
+        case None           => Result.raise(TodoError.NotFound(id))
+        case Some(existing) =>
+          Validation.patch(existing, patch) match
+            case Left(error)    => Result.raise(error)
+            case Right(patched) =>
+              for
+                now <- clock.now
+                saved <- repository.replace(patched.copy(updatedAt = now))
+              yield saved.toRight(TodoError.NotFound(id))
 
   def delete(id: TodoId): Result[F, Unit] =
     repository.delete(id).map(removed => Either.cond(removed, (), TodoError.NotFound(id)))

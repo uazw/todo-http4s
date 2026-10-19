@@ -25,8 +25,8 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
   private def body(response: Response[IO]): IO[Json] =
     response.as[Json]
 
-  test("GET /docs serves the CDN-backed UI and its OpenAPI document") {
-    withStack { f =>
+  test("GET /docs serves the CDN-backed UI and its OpenAPI document"):
+    withStack: f =>
       for
         docs <- send(f, Request[IO](Method.GET, uri"/docs"))
         html <- docs.as[String]
@@ -39,11 +39,9 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         assertEquals(spec.status, Status.Ok)
         assert(yaml.contains("openapi: 3.0.3"))
         assert(yaml.contains("/api/todos/{id}:"))
-    }
-  }
 
-  test("POST /api/todos creates a todo and returns 201 with a Location header") {
-    withStack { f =>
+  test("POST /api/todos creates a todo and returns 201 with a Location header"):
+    withStack: f =>
       val request = Request[IO](Method.POST, uri"/api/todos")
         .withEntity(Json.obj("title" -> Json.fromString("write the tests")))
       for
@@ -57,11 +55,9 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         )
         assertEquals(json.hcursor.get[String]("status").toOption, Some("pending"))
         assertEquals(json.hcursor.get[String]("title").toOption, Some("write the tests"))
-    }
-  }
 
-  test("POST /api/todos rejects a blank title with a 400 naming the field") {
-    withStack { f =>
+  test("POST /api/todos rejects a blank title with a 400 naming the field"):
+    withStack: f =>
       val request = Request[IO](Method.POST, uri"/api/todos")
         .withEntity(Json.obj("title" -> Json.fromString("")))
       for
@@ -71,18 +67,14 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         assertEquals(response.status, Status.BadRequest)
         assertEquals(json.hcursor.get[String]("field").toOption, Some("title"))
         assertEquals(json.hcursor.get[String]("error").toOption, Some("invalid_request"))
-    }
-  }
 
-  test("POST /api/todos rejects malformed JSON with a 400") {
-    withStack { f =>
+  test("POST /api/todos rejects malformed JSON with a 400"):
+    withStack: f =>
       val request = Request[IO](Method.POST, uri"/api/todos").withEntity(Json.obj("nope" -> Json.True))
       send(f, request).map(response => assertEquals(response.status, Status.BadRequest))
-    }
-  }
 
-  test("GET /api/todos returns a page envelope with filters applied") {
-    withStack { f =>
+  test("GET /api/todos returns a page envelope with filters applied"):
+    withStack: f =>
       def create(title: String, status: Option[String] = None): IO[Unit] =
         val payload = Json.obj("title" -> Json.fromString(title)) deepMerge
           status.fold(Json.obj())(s => Json.obj("status" -> Json.fromString(s)))
@@ -102,19 +94,14 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         assertEquals(items.length, 2)
         assertEquals(total, 2L)
         assertEquals(filtered.hcursor.get[Long]("total").toOption, Some(1L))
-    }
-  }
 
-  test("GET /api/todos rejects a bad status filter with a 400") {
-    withStack { f =>
-      send(f, Request[IO](Method.GET, Uri.unsafeFromString("/api/todos?status=banana"))).map { response =>
+  test("GET /api/todos rejects a bad status filter with a 400"):
+    withStack: f =>
+      send(f, Request[IO](Method.GET, Uri.unsafeFromString("/api/todos?status=banana"))).map: response =>
         assertEquals(response.status, Status.BadRequest)
-      }
-    }
-  }
 
-  test("GET /api/todos/{id} returns 404 for an unknown id and 400 for a non-uuid") {
-    withStack { f =>
+  test("GET /api/todos/{id} returns 404 for an unknown id and 400 for a non-uuid"):
+    withStack: f =>
       for
         missing <- send(
           f,
@@ -124,11 +111,9 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
       yield
         assertEquals(missing.status, Status.NotFound)
         assertEquals(notAnId.status, Status.BadRequest)
-    }
-  }
 
-  test("PATCH /api/todos/{id} updates status, and null clears the due date") {
-    withStack { f =>
+  test("PATCH /api/todos/{id} updates status, and null clears the due date"):
+    withStack: f =>
       for
         created <- body(
           send(
@@ -158,11 +143,9 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
         assertEquals(patched.hcursor.get[String]("status").toOption, Some("done"))
         assertEquals(patched.hcursor.get[String]("title").toOption, Some("ship it"))
         assertEquals(patched.hcursor.get[Option[String]]("dueAt").toOption, Some(None))
-    }
-  }
 
-  test("DELETE /api/todos/{id} returns 204, then the todo is gone") {
-    withStack { f =>
+  test("DELETE /api/todos/{id} returns 204, then the todo is gone"):
+    withStack: f =>
       for
         created <- body(
           send(
@@ -179,16 +162,12 @@ class TodoRoutesSpec extends munit.CatsEffectSuite:
       yield
         assertEquals(first.status, Status.NoContent)
         assertEquals(second.status, Status.NotFound)
-    }
-  }
 
-  test("GET /health reports the database as up and an unknown route as 404") {
-    withStack { f =>
+  test("GET /health reports the database as up and an unknown route as 404"):
+    withStack: f =>
       for
         health <- body(send(f, Request[IO](Method.GET, uri"/health")))
         unknown <- send(f, Request[IO](Method.GET, uri"/nope"))
       yield
         assertEquals(health.hcursor.get[String]("database").toOption, Some("up"))
         assertEquals(unknown.status, Status.NotFound)
-    }
-  }

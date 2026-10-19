@@ -26,7 +26,7 @@ final class DoobieTodoRepository[F[_]: MonadCancelThrow](xa: Transactor[F]) exte
     * UTC.
     */
   private given Read[Todo] =
-    Read[(UUID, String, Option[String], TodoStatus, Option[Instant], Instant, Instant)].map {
+    Read[(UUID, String, Option[String], TodoStatus, Option[Instant], Instant, Instant)].map:
       case (id, title, description, status, dueAt, createdAt, updatedAt) =>
         Todo(
           id = TodoId(id),
@@ -37,7 +37,6 @@ final class DoobieTodoRepository[F[_]: MonadCancelThrow](xa: Transactor[F]) exte
           createdAt = createdAt,
           updatedAt = updatedAt
         )
-    }
 
   private def where(filter: TodoFilter): Fragment =
     Fragments.whereAndOpt(
