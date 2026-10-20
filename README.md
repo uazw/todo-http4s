@@ -23,7 +23,7 @@ full suite; nothing else in the build needs to change either way.
 ## Layout
 
 ```
-auto/check                         # the gate: testFull + scalafmtCheckAll
+auto/check                         # the gate: nesting lint + testFull + scalafmtCheckAll
 scripts/smoke.sh                   # end-to-end HTTP checks against a running instance
 src/main/scala/todo/
 ├── domain/                        # pure: no cats, no doobie, no http4s
@@ -194,11 +194,11 @@ Errors are uniform, so a client parses one shape:
 ## Tests
 
 ```bash
-auto/check                       # every test (including PostgreSQL) + format check
+auto/check                       # nesting lint + every test (including PostgreSQL) + format check
 auto/check --help
 ```
 
-`auto/check` is the one command worth remembering: it runs `testFull` and `scalafmtCheckAll`, exits
+`auto/check` is the one command worth remembering: it runs `scalafixAll --check`, `testFull`, and `scalafmtCheckAll`, exits
 non-zero on any failure, and works from any directory. The repository integration spec uses
 Testcontainers to start an isolated `postgres:18-alpine` instance on a random host port and remove
 it after the suite. A Docker-compatible runtime must therefore be running locally. No test database,
@@ -223,6 +223,24 @@ algebra, wired with a deterministic `Clock` and `IdGen` — which is the whole r
 algebras rather than direct calls to `Instant.now()` and `UUID.randomUUID()`. The integration spec
 covers what in-memory cannot: real `TIMESTAMPTZ` round-tripping, ordering and `OFFSET`, `ILIKE`
 semantics, and that a literal `%` in a search term is escaped rather than treated as a wildcard.
+
+## Nesting lint
+
+`FlatMapNesting` allows at most **two nested explicit `flatMap` callbacks** in main and test
+sources. A third callback fails the check with a source location and a suggestion to use a `for`
+comprehension or extract a named helper. Sequential `.flatMap(...).flatMap(...)` chains and flat
+`for` comprehensions do not increase callback nesting. Both lambda and pattern-match callbacks
+count, including Scala 3 colon syntax and curried calls such as `Monad[F].flatMap(value)(callback)`.
+
+This is a syntactic Scalafix rule: it checks any method spelled `flatMap`, regardless of its type,
+and measures source nesting before `for` desugaring. Named method bodies start a separate flow.
+The limit lives in `lint-rules/src/main/scala/todo/lint/FlatMapNesting.scala`; its regression tests
+run with the rest of the build. `.scalafix.conf` enables the rule, and `auto/check` runs it in CI.
+
+```bash
+sbt 'scalafixAll --check'         # check both main and test sources
+sbt 'lintRules/testFull'          # test the lint rule itself
+```
 
 ## Formatting
 
@@ -249,7 +267,7 @@ sbt scalafmtSbtCheck   # build.sbt and project/*.sbt only
 ```
 
 Formatting is checked as part of `auto/check`, so there is no separate step to remember. To combine
-tasks by hand, separate them with `;`: `sbt "; testFull; scalafmtCheckAll"`.
+tasks by hand, separate them with `;`: `sbt "; scalafixAll --check; testFull; scalafmtCheckAll"`.
 
 `project/plugins.sbt` is checked in for exactly this reason — `.scalafmt.conf` on its own does
 nothing, since nothing reads it. sbt resolves the correct plugin artifact line from the sbt version

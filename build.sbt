@@ -13,7 +13,21 @@ val MunitVersion          = "1.3.6"
 val MunitCeVersion        = "2.2.1"
 val TestcontainersVersion = "2.0.5"
 
+lazy val lintRules = (project in file("lint-rules"))
+  .disablePlugins(ScalafixPlugin)
+  .settings(
+    name := "todo-lint-rules",
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      ("ch.epfl.scala" %% "scalafix-core" % _root_.scalafix.sbt.BuildInfo.scalafixVersion)
+        .cross(CrossVersion.for3Use2_13),
+      "org.scalameta" %% "munit" % MunitVersion % Test
+    )
+  )
+
 lazy val root = (project in file("."))
+  .aggregate(lintRules)
+  .dependsOn(lintRules % ScalafixConfig)
   .settings(
     name := "todo-service",
     scalacOptions ++= Seq(
