@@ -3,3 +3,4 @@
 // This build is on sbt 2, so `sbt-scalafmt_sbt2_3` is what gets resolved.
 // The scalafmt version itself is pinned in .scalafmt.conf, not here.
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.2")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.14.9")

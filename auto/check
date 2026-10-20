@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# The pre-merge gate: every test (including PostgreSQL), then the format check.
+# The pre-merge gate: nesting lint, every test (including PostgreSQL), and formatting.
 #
 #   auto/check
 #   auto/check --help
@@ -42,6 +42,6 @@ printf '==> running every suite, including PostgreSQL via Testcontainers\n'
 #     prints "Total 0" and exits 0 when it thinks nothing changed.
 #   * Tasks are semicolon-separated; `sbt testFull scalafmtCheckAll` would be
 #     parsed as a single command and fail.
-sbt -batch -Dsbt.supershell=false "; testFull; scalafmtCheckAll"
+sbt -batch -Dsbt.supershell=false "; scalafixAll --check; testFull; scalafmtCheckAll"
 
 printf '\n==> check passed — all suites, including PostgreSQL\n'

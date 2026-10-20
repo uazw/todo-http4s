@@ -1,6 +1,7 @@
 package todo.application
 
 import cats.Monad
+import cats.data.EitherT
 import cats.syntax.all.*
 import todo.application.port.in.{Result, TodoService}
 import todo.application.port.out.{Clock, IdGen, TodoRepository}
@@ -15,52 +16,51 @@ final class TodoServiceImpl[F[_]: Monad](
 
   import TodoServiceImpl.clampLimit
 
+  /** The one repeated step across use cases: resolve an id or fail the error channel with NotFound. */
+  private def findOrFail(id: TodoId): EitherT[F, TodoError, Todo] =
+    EitherT.fromOptionF(repository.find(id), TodoError.NotFound(id))
+
   def create(input: CreateTodo): Result[F, Todo] =
-    Validation.createTodo(input) match
-      case Left(error)  => Result.raise(error)
-      case Right(valid) =>
-        for
-          now <- clock.now
-          uuid <- ids.next
-          todo = Todo(
-            id = TodoId(uuid),
-            title = valid.title,
-            description = valid.description,
-            status = TodoStatus.Pending,
-            dueAt = valid.dueAt,
-            createdAt = now,
-            updatedAt = now
-          )
-          saved <- repository.insert(todo)
-        yield Right(saved)
+    (for
+      valid <- EitherT.fromEither[F](Validation.createTodo(input))
+      now <- EitherT.liftF(clock.now)
+      uuid <- EitherT.liftF(ids.next)
+      todo = Todo(
+        id = TodoId(uuid),
+        title = valid.title,
+        description = valid.description,
+        status = TodoStatus.Pending,
+        dueAt = valid.dueAt,
+        createdAt = now,
+        updatedAt = now
+      )
+      saved <- EitherT.liftF(repository.insert(todo))
+    yield saved).value
 
   def get(id: TodoId): Result[F, Todo] =
-    repository.find(id).map(_.toRight(TodoError.NotFound(id)))
+    findOrFail(id).value
 
   def list(filter: TodoFilter, limit: Int, offset: Int): Result[F, Page[Todo]] =
     val effectiveLimit = clampLimit(limit)
     val effectiveOffset = math.max(0, offset)
-    for
-      items <- repository.list(filter, effectiveLimit, effectiveOffset)
-      total <- repository.count(filter)
-    yield Right(Page(items, total, effectiveLimit, effectiveOffset))
+    (repository.list(filter, effectiveLimit, effectiveOffset), repository.count(filter))
+      .mapN(Page(_, _, effectiveLimit, effectiveOffset))
+      .map(_.asRight[TodoError])
 
   def update(id: TodoId, patch: UpdateTodo): Result[F, Todo] =
-    repository
-      .find(id)
-      .flatMap:
-        case None           => Result.raise(TodoError.NotFound(id))
-        case Some(existing) =>
-          Validation.patch(existing, patch) match
-            case Left(error)    => Result.raise(error)
-            case Right(patched) =>
-              for
-                now <- clock.now
-                saved <- repository.replace(patched.copy(updatedAt = now))
-              yield saved.toRight(TodoError.NotFound(id))
+    (for
+      existing <- findOrFail(id)
+      patched <- EitherT.fromEither[F](Validation.patch(existing, patch))
+      now <- EitherT.liftF(clock.now)
+      saved <- EitherT.liftF(repository.replace(patched.copy(updatedAt = now)))
+      todo <- EitherT.fromOption[F](saved, TodoError.NotFound(id))
+    yield todo).value
 
   def delete(id: TodoId): Result[F, Unit] =
-    repository.delete(id).map(removed => Either.cond(removed, (), TodoError.NotFound(id)))
+    EitherT
+      .liftF(repository.delete(id))
+      .flatMap(removed => EitherT.fromEither[F](Either.cond(removed, (), TodoError.NotFound(id))))
+      .value
 
 object TodoServiceImpl:
 
