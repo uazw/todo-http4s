@@ -9,6 +9,7 @@ val DoobieVersion         = "1.0.0-RC12"
 val LogbackVersion        = "1.6.3"
 val TypesafeConfig        = "1.4.9"
 val PostgresVersion       = "42.7.13"
+val FlywayVersion         = "13.11.1"
 val MunitVersion          = "1.3.6"
 val MunitCeVersion        = "2.2.1"
 val TestcontainersVersion = "2.0.5"
@@ -45,6 +46,9 @@ lazy val root = (project in file("."))
       "org.tpolecat"   %% "doobie-hikari"         % DoobieVersion,
       "org.tpolecat"   %% "doobie-postgres"       % DoobieVersion,
       "org.postgresql"  % "postgresql"            % PostgresVersion,
+      // schema migrations; Postgres support is a separate module since Flyway 10
+      "org.flywaydb"    % "flyway-core"                % FlywayVersion,
+      "org.flywaydb"    % "flyway-database-postgresql" % FlywayVersion,
       // http layer
       "org.http4s"     %% "http4s-ember-server"   % Http4sVersion,
       "org.http4s"     %% "http4s-dsl"            % Http4sVersion,

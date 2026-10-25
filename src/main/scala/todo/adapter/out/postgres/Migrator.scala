@@ -1,40 +1,34 @@
 package todo.adapter.out.postgres
 
-import cats.effect.kernel.MonadCancelThrow
-import cats.syntax.all.*
-import doobie.*
-import doobie.implicits.*
-import scala.io.Source
+import cats.effect.Sync
+import org.flywaydb.core.Flyway
+import org.flywaydb.core.api.output.MigrateResult
+import todo.boot.DatabaseConfig
 
-/** Minimal schema bootstrap: runs the bundled `schema.sql`. The DDL is written to be idempotent (`IF NOT EXISTS`), so
-  * running it on every boot is a no-op.
+/** Flyway-backed schema migrations, loaded from `classpath:db/migration`.
   *
-  * For a schema that evolves, swap this for Flyway/Liquibase — the rest of the application does not care how the tables
-  * got there.
+  * Takes the connection settings rather than a doobie `Transactor`: Flyway wants a JDBC `DataSource`, and opening its
+  * own short-lived connection keeps migrations independent of the application's connection pool. Production boot and
+  * the integration specs both go through [[run]], so the tests exercise the real migration path.
   */
 object Migrator:
 
-  val DefaultScript: String = "db/schema.sql"
+  val Location: String = "classpath:db/migration"
 
-  def run[F[_]: MonadCancelThrow](xa: Transactor[F], script: String = DefaultScript): F[Unit] =
-    load(script) match
-      case Left(message)     => MonadCancelThrow[F].raiseError(new IllegalStateException(message))
-      case Right(statements) =>
-        statements.traverse_(statement => Fragment.const(statement).update.run.transact(xa)).void
+  /** Databases created before Flyway was adopted already contain the V1 schema but have no history table. Baselining at
+    * version 1 records V1 as applied there instead of failing on the existing table. An empty database still runs V1
+    * normally.
+    */
+  private val BaselineVersion: String = "1"
 
-  private[postgres] def load(script: String): Either[String, List[String]] =
-    Option(getClass.getClassLoader.getResourceAsStream(script)) match
-      case None         => Left(s"migration script '$script' not found on the classpath")
-      case Some(stream) =>
-        val source = Source.fromInputStream(stream, "UTF-8")
-        try
-          val statements = source
-            .getLines()
-            .filterNot(_.trim.startsWith("--"))
-            .mkString("\n")
-            .split(";")
-            .map(_.trim)
-            .filter(_.nonEmpty)
-            .toList
-          Right(statements)
-        finally source.close()
+  def run[F[_]: Sync](config: DatabaseConfig): F[MigrateResult] =
+    Sync[F].blocking(flyway(config).migrate())
+
+  private[postgres] def flyway(config: DatabaseConfig): Flyway =
+    Flyway
+      .configure()
+      .dataSource(config.jdbcUrl, config.user, config.password)
+      .locations(Location)
+      .baselineOnMigrate(true)
+      .baselineVersion(BaselineVersion)
+      .load()
