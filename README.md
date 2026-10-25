@@ -54,7 +54,7 @@ src/main/scala/todo/
 │       │   ├── StatusColumn.scala # strict DB column Meta mapping
 │       │   ├── PostgresPing.scala # DB liveness probe
 │       │   ├── Database.scala     # transactor pool
-│       │   └── Migrator.scala     # schema bootstrap
+│       │   └── Migrator.scala     # Flyway schema migrations
 │       └── system/                # production system adapters
 │           ├── SystemClock.scala
 │           └── RandomIdGen.scala
@@ -117,9 +117,11 @@ scripts/smoke.sh
 docker compose stop postgres
 ```
 
-The schema is applied at boot from `src/main/resources/db/schema.sql`. The DDL is idempotent
-(`CREATE TABLE IF NOT EXISTS`), so the boot path is a no-op on an existing database. For a schema
-that evolves over time, replace `db/Migrator.scala` with Flyway or Liquibase — nothing else changes.
+The schema is managed by Flyway. Migrations live in `src/main/resources/db/migration` (`V1__create_todos.sql`,
+`V2__...sql`, …) and are applied at boot when `TODO_MIGRATE_ON_START` is `true`. To change the schema, add a new
+versioned script — never edit one that has already shipped. A database created before Flyway was adopted is
+baselined at version 1 automatically. The integration specs run the same migrations against a Testcontainers
+PostgreSQL.
 
 ### Configuration
 

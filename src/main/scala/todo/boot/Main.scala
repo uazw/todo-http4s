@@ -26,8 +26,8 @@ object Main extends IOApp:
   /** The whole object graph, expressed as a `Resource` so ordering and cleanup are explicit. */
   def application(config: AppConfig): Resource[IO, Unit] =
     for
+      _ <- Resource.eval(IO.whenA(config.migrateOnStart)(migrate(config.database)))
       xa <- Database.transactor[IO](config.database)
-      _ <- Resource.eval(IO.whenA(config.migrateOnStart)(Migrator.run[IO](xa)))
       _ <- Resource.eval(IO(logger.info("connected to {}", config.database.jdbcUrl)))
       repository = DoobieTodoRepository[IO](xa)
       service = TodoServiceImpl[IO](repository, SystemClock[IO], RandomIdGen[IO])
@@ -45,3 +45,15 @@ object Main extends IOApp:
         .build
         .evalTap(_ => IO(logger.info("todo-service listening on http://{}:{}", host.toString, port.value.toString)))
     yield ()
+
+  private def migrate(database: DatabaseConfig): IO[Unit] =
+    Migrator
+      .run[IO](database)
+      .flatMap: result =>
+        IO(
+          logger.info(
+            "schema migrations applied: {} (now at version {})",
+            result.migrationsExecuted,
+            Option(result.targetSchemaVersion).getOrElse("unchanged")
+          )
+        )

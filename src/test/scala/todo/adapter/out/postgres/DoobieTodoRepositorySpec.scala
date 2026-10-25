@@ -1,6 +1,6 @@
 package todo.adapter.out.postgres
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all.*
 import doobie.Transactor
 import doobie.implicits.*
@@ -8,47 +8,25 @@ import doobie.postgres.implicits.*
 import java.time.{Instant, ZoneOffset}
 import java.util.UUID
 import munit.CatsEffectSuite
-import org.testcontainers.postgresql.PostgreSQLContainer
-import scala.concurrent.duration.*
 import todo.application.port.out.TodoRepository
-import todo.boot.DatabaseConfig
 import todo.domain.*
 
 /** Integration spec for the doobie interpreter against a real PostgreSQL.
   *
-  * Testcontainers starts an isolated database for this suite and removes it afterwards. The only external requirement
-  * is a Docker-compatible container runtime.
+  * [[PostgresFixture]] starts one container for the whole suite and applies the Flyway migrations once; each test then
+  * starts from an empty `todos` table.
   */
 class DoobieTodoRepositorySpec extends CatsEffectSuite:
 
-  private val postgres =
-    new PostgreSQLContainer("postgres:18-alpine")
-      .withDatabaseName("todo_test")
-      .withUsername("todo")
-      .withPassword("todo")
+  private val database = ResourceSuiteLocalFixture("postgres", PostgresFixture.resource)
 
-  override def beforeAll(): Unit = postgres.start()
+  override def munitFixtures = List(database)
 
-  override def afterAll(): Unit = postgres.stop()
+  private def xa: Transactor[IO] = database().xa
 
-  private lazy val config = DatabaseConfig(
-    host = postgres.getHost,
-    port = postgres.getFirstMappedPort,
-    name = postgres.getDatabaseName,
-    user = postgres.getUsername,
-    password = postgres.getPassword,
-    poolSize = 4,
-    connectionTimeout = 5.seconds
-  )
-
-  private lazy val transactor: Resource[IO, Transactor[IO]] = Database.transactor[IO](config)
-
-  /** Fresh schema per test — the table is truncated, not the database dropped. */
+  /** Clean slate per test — rows are truncated; the migrated schema is kept. */
   private def withRepository[A](body: TodoRepository[IO] => IO[A]): IO[A] =
-    transactor.use: xa =>
-      Migrator.run[IO](xa) *>
-        sql"TRUNCATE todos".update.run.transact(xa) *>
-        body(DoobieTodoRepository[IO](xa))
+    sql"TRUNCATE todos".update.run.transact(xa) *> body(DoobieTodoRepository[IO](xa))
 
   private def todo(
       title: String,
@@ -168,22 +146,37 @@ class DoobieTodoRepositorySpec extends CatsEffectSuite:
         .map: outcome =>
           assert(outcome.isLeft, "inserting the same primary key twice must fail")
 
-  test("schema bootstrap is idempotent"):
+  test("migrating an up-to-date database applies nothing"):
     withRepository: repository =>
-      // `withRepository` has already applied the schema once; applying it again
-      // must not fail on the existing table or indexes.
-      transactor.use: xa =>
-        Migrator.run[IO](xa) *> Migrator
-          .run[IO](xa) *> repository.count(TodoFilter.all).map(total => assertEquals(total, 0L))
+      // The fixture has already migrated this database; a second boot must be a no-op.
+      for
+        result <- Migrator.run[IO](database().config)
+        total <- repository.count(TodoFilter.all)
+      yield
+        assertEquals(result.migrationsExecuted, 0)
+        assertEquals(total, 0L)
+
+  test("a pre-Flyway database is baselined at V1 rather than re-running it"):
+    val legacy = database().config.copy(name = "todo_legacy")
+    val v1 = "db/migration/V1__create_todos.sql"
+    for
+      _ <- PostgresFixture.createDatabase(database().config, legacy.name)
+      // Simulate a database bootstrapped by the old schema.sql runner: tables, no history.
+      _ <- PostgresFixture.execute(legacy, PostgresFixture.resourceText(v1))
+      result <- Migrator.run[IO](legacy)
+      info <- IO.blocking(Migrator.flyway(legacy).info().current())
+    yield
+      assertEquals(result.migrationsExecuted, 0)
+      assertEquals(Option(info).map(_.getVersion.getVersion), Some("1"))
 
   test("corrupt status in database fails the read rather than silently falling back"):
-    transactor.use: xa =>
+    withRepository: repository =>
       val id = UUID.randomUUID()
       val insertCorrupt =
         sql"""INSERT INTO todos (id, title, status, created_at, updated_at)
               VALUES ($id, 'corrupt', 'unknown_status', now(), now())""".update.run.transact(xa)
 
-      insertCorrupt *> DoobieTodoRepository[IO](xa)
+      insertCorrupt *> repository
         .find(TodoId(id))
         .attempt
         .map: outcome =>
